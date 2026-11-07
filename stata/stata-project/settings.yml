@@ -1,0 +1,43 @@
+# settings.yml: settings that fw, R, Python, and Stata share.
+#
+# The folders of this Stata project live in settings.do. This file adds what
+# settings.do cannot hold: the data catalog and the publishing destinations.
+# fw_project reads both files.
+default:
+  # The data catalog. Each entry is a named dataset: fw_use study.visits
+  # reads the shared CSV and checks it against the checksum Framework recorded
+  # the first time. locked: true makes a changed file stop with error 459.
+  data:
+    study:
+      sites:
+        path: ../../shared/csv/sites.csv
+        type: csv
+        locked: true
+      participants:
+        path: ../../shared/csv/participants.csv
+        type: csv
+        locked: true
+      visits:
+        path: ../../shared/csv/visits.csv
+        type: csv
+        locked: true
+      labs:
+        path: ../../shared/csv/labs.csv
+        type: csv
+        locked: true
+      survey:
+        path: ../../shared/csv/survey.csv
+        type: csv
+        locked: true
+
+  # Publishing destinations. local-site is a plain folder inside the project
+  # (gitignored). Open local-site/index.html in a browser after publishing.
+  # A folder destination must declare its visibility, and fw_publish's
+  # visibility() option must then match it.
+  publish:
+    default: local-site
+    destinations:
+      local-site:
+        driver: folder
+        path: local-site
+        visibility: private

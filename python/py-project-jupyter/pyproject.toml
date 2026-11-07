@@ -1,0 +1,17 @@
+[project]
+name = "py-project-jupyter"
+version = "0.1.0"
+description = "py-project-jupyter"
+requires-python = ">=3.11"
+dependencies = [
+    "framework-py",
+    "ipykernel",
+    "nbformat",
+    "nbclient",
+    "jupyterlab",
+    "matplotlib>=3.11.2",
+    "statsmodels>=0.15.0",
+]
+
+[tool.uv]
+package = false

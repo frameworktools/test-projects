@@ -1,0 +1,6 @@
+scaffold:
+  seed_on_scaffold: false
+  seed: '123'
+  source_all_functions: true
+  workflow: quarto
+  notebook_format: quarto

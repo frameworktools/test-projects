@@ -1,0 +1,42 @@
+---
+title: "Blood pressure brief"
+author: "Your Name"
+date: "2026-11-07"
+jupyter: python3
+---
+
+A one-page summary that `05-outputs.qmd` renders with `save_notebook()` and
+`06-publishing.qmd` publishes. It reads the analysis file from notebook 02.
+
+```{python}
+#| label: setup
+#| include: false
+
+import framework as fw
+import matplotlib.pyplot as plt
+
+fw.scaffold()
+bp = fw.data_read("inputs.final.bp_analysis")
+```
+
+```{python}
+#| echo: false
+summary = (
+    bp.groupby(["treatment", "visit_number"])["systolic_bp"]
+    .agg(["count", "mean"])
+    .round(1)
+    .unstack("treatment")
+)
+summary
+```
+
+```{python}
+#| echo: false
+#| fig-cap: "Mean systolic blood pressure by visit and treatment arm"
+means = bp.groupby(["visit_number", "treatment"])["systolic_bp"].mean().unstack()
+ax = means.plot(marker="o", figsize=(6, 3.5))
+ax.set_xlabel("Visit")
+ax.set_ylabel("Systolic BP (mmHg)")
+ax.set_xticks(means.index)
+plt.show()
+```

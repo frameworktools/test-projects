@@ -1,0 +1,17 @@
+* settings.do: paths for stata-bare
+*
+* fw wrote this file from the project spec. Every do-file refers to folders
+* through these globals, so the project runs on any machine without edits.
+* Stata cannot read the project's YAML settings, so the paths live here.
+*
+* Run Stata from the project folder: cd to it first, or open master.do from
+* there. The root is set from the current folder every time, because globals
+* from another project in the same Stata session would otherwise linger.
+
+global root `"`c(pwd)'"'
+capture confirm file `"$root/settings.do"'
+if _rc {
+    display as error `"settings.do: $root is not the project folder. In Stata, cd to the folder that holds settings.do and master.do, then run the do-file again."'
+    exit 601
+}
+

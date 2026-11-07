@@ -1,0 +1,20 @@
+connections:
+  default_database: framework
+  databases:
+    framework:
+      driver: sqlite
+      database: framework.db
+    # Shared study database used by the R, Python, and Stata test projects.
+    # SQLite paths are resolved from the project root, so this works the same
+    # from notebooks/ as from the root. read_only: true opens it read-only,
+    # and db_execute() and db_transaction() refuse it.
+    study:
+      driver: sqlite
+      database: ../../shared/study.sqlite
+      read_only: true
+    # A project-local scratch database for the write demos (db_execute,
+    # db_transaction). Gitignored; delete it any time.
+    analysis:
+      driver: sqlite
+      database: analysis.sqlite
+  storage_buckets: {}

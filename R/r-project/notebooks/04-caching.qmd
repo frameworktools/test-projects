@@ -1,0 +1,151 @@
+---
+title: "04 · Caching"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+Framework's cache stores R objects as files in `outputs/cache/` (gitignored)
+with a record in `framework.db`. It's for results that are slow to compute
+and safe to reuse, such as a fitted model. Run notebook 02 first: this one
+reads `inputs.final.bp_long`.
+
+```{r}
+bp_long <- data_read("inputs.final.bp_long")
+```
+
+## Start clean
+
+`cache_flush()` empties the cache, so the timings below show a real first run.
+
+```{r}
+cache_flush()
+cache_list()
+```
+
+## cache_remember(): compute once, reuse after
+
+The question for the tour: does systolic pressure change differently over the
+visits in the two arms? A mixed model with a random intercept per participant
+accounts for repeated visits. The `Sys.sleep()` stands in for a model that
+takes a while.
+
+```{r}
+fit_bp_model <- function(data) {
+  Sys.sleep(2)
+  lme4::lmer(systolic_bp ~ visit_number * treatment + age + sex + (1 | participant_id), data = data)
+}
+```
+
+The first call runs the expression and stores the result. Look at the elapsed
+time.
+
+```{r}
+first_run <- system.time(
+  bp_model <- cache_remember("bp_mixed_model", fit_bp_model(bp_long), expire_after = "1 day")
+)
+first_run["elapsed"]
+```
+
+The second call finds the cached model and returns almost at once.
+
+```{r}
+second_run <- system.time(
+  bp_model <- cache_remember("bp_mixed_model", fit_bp_model(bp_long))
+)
+second_run["elapsed"]
+```
+
+The cached object is the full model. The `visit_number:treatmentintervention`
+row is the difference in slope between arms, in mmHg per visit.
+
+```{r}
+round(summary(bp_model)$coefficients, 2)
+```
+
+`refresh = TRUE` forces a recompute, for example after the data changes.
+`refresh` also takes a function, such as one that checks a file's timestamp.
+
+```{r}
+refresh_run <- system.time(
+  bp_model <- cache_remember("bp_mixed_model", fit_bp_model(bp_long), refresh = TRUE)
+)
+refresh_run["elapsed"]
+```
+
+## cache() and cache_get(): store and fetch directly
+
+`cache()` stores a value under a name, and `cache_get()` fetches it, or returns
+`NULL` when it's missing or expired. Here, the per-arm counts of
+participants by BP category at their first visit.
+
+```{r}
+baseline_categories <- bp_long |>
+  filter(visit_number == 1) |>
+  count(treatment, bp_category)
+
+cache("baseline_bp_categories", baseline_categories)
+cache_get("baseline_bp_categories")
+```
+
+Expiry takes hours as a number, or text such as `"30 minutes"`, `"12 hours"`,
+`"2 days"`, or `"45 seconds"`. Look at `expire_at` for an entry kept 30
+minutes.
+
+```{r}
+cache("site_list", db_query("SELECT site_name FROM sites", "study"), expire_after = "30 minutes")
+cache_list()[, c("name", "expire_at", "created_at")]
+```
+
+This one expires after a second, so the `cache_get()` that follows finds
+nothing.
+
+```{r}
+cache("short_lived_note", "check again tomorrow", expire_after = "1 second")
+Sys.sleep(1.5)
+cache_get("short_lived_note")
+```
+
+## cache_list()
+
+Every entry, with when it expires and when it was last read. Entries with no
+`expire_after` don't expire.
+
+```{r}
+cache_list()
+list.files("outputs/cache")
+```
+
+## Forgetting and flushing
+
+`cache_forget()` removes one entry and its file; `cache_flush()` removes all of
+them.
+
+```{r}
+cache_forget("baseline_bp_categories")
+cache_list()$name
+```
+
+```{r}
+cache_flush()
+cache_list()
+list.files("outputs/cache")
+```

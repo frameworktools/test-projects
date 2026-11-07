@@ -1,0 +1,83 @@
+---
+title: "Blood pressure trial: one-year update"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  revealjs:
+    theme: default
+    transition: slide
+    slide-number: true
+    chalkboard: true
+execute:
+  echo: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+```{r}
+#| label: data
+#| include: false
+
+# One query per slide is fine for a talk; cache_remember() keeps re-renders
+# fast while you edit the slides. Delete cache/ to force fresh numbers.
+visits <- cache_remember("visits_with_arm", db_query(
+  "SELECT v.participant_id, v.visit_number, v.systolic_bp, p.treatment, s.site_name
+   FROM visits v
+   JOIN participants p ON p.participant_id = v.participant_id
+   JOIN sites s ON s.site_id = p.site_id",
+  "study"
+))
+
+n_participants <- db_query("SELECT COUNT(*) AS n FROM participants", "study")$n
+```
+
+## Where we are
+
+- `r n_participants` participants at four clinics, randomized 1:1
+- `r format(nrow(visits))` visits recorded so far
+- Primary outcome: systolic blood pressure
+
+## Systolic pressure by visit
+
+```{r}
+#| fig-width: 8
+#| fig-height: 4.5
+sbp_by_visit <- visits |>
+  group_by(treatment, visit_number) |>
+  summarise(mean_systolic = mean(systolic_bp, na.rm = TRUE), .groups = "drop")
+
+ggplot(sbp_by_visit, aes(visit_number, mean_systolic, colour = treatment)) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
+  labs(x = "Visit", y = "Mean systolic pressure (mmHg)", colour = NULL) +
+  theme(legend.position = "top", text = element_text(size = 16))
+```
+
+## By clinic, at each participant's last visit
+
+```{r}
+last_visit <- visits |>
+  group_by(participant_id) |>
+  filter(visit_number == max(visit_number)) |>
+  ungroup()
+
+last_visit |>
+  group_by(site_name, treatment) |>
+  summarise(mean_systolic = round(mean(systolic_bp, na.rm = TRUE), 1), .groups = "drop") |>
+  tidyr::pivot_wider(names_from = treatment, values_from = mean_systolic) |>
+  knitr::kable(col.names = c("Clinic", "Control", "Intervention"))
+```
+
+## Next steps
+
+- Finish visit 4 follow-up
+- Fit the mixed model for the full analysis
+- Present final results at the spring meeting
+
+## Questions?

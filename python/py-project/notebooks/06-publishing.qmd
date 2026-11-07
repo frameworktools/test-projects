@@ -1,0 +1,214 @@
+---
+title: "06 Publishing"
+subtitle: "publish, publish_notebook, publish_data, publish_dir, publish_list; cloud calls"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+jupyter: python3
+---
+
+`publish()` sends a result to a destination named in `settings.yml`. This project has
+one, `local`, a folder destination that writes to `published/` (ignored by git). Each
+publish becomes a portable bundle with checksums and an offline `index.html` reader.
+Run notebook 05 first: this one publishes its outputs.
+
+```{python}
+#| label: setup
+import json
+import pickle
+
+import framework as fw
+import matplotlib.pyplot as plt
+import pandas as pd
+
+root = fw.scaffold()
+bp = fw.data_read("inputs.final.bp_analysis")
+```
+
+## The destination
+
+The `publish` section names the destinations and the default. A relative folder `path`
+is resolved from the project root, so this notebook (which runs from `notebooks/`)
+still writes to `<root>/published`.
+
+```{python}
+fw.settings("publish")
+```
+
+## Publish a DataFrame
+
+A DataFrame becomes a table artifact: the bundle keeps a CSV export and a typed
+representation with column summaries. Look at the message with the version, and the
+return value: the folder it landed in (or the URL, when the destination has a `url`).
+
+```{python}
+table = pd.read_csv(root / "outputs/tables/bp_by_visit.csv")
+
+fw.publish(table, to="local", slug="bp-by-visit",
+           title="Blood pressure by visit",
+           description="Mean systolic and diastolic BP by arm and visit")
+```
+
+Without `to=`, `publish.default` picks the destination, so this goes to `local` too.
+
+```{python}
+fw.publish(bp.groupby("treatment")["systolic_bp"].describe().round(1),
+           slug="bp-by-arm", title="Systolic BP by arm")
+```
+
+## Publish a figure, a model, and a file
+
+A matplotlib figure is exported as SVG.
+
+```{python}
+means = bp.groupby(["visit_number", "treatment"])["systolic_bp"].mean().unstack()
+ax = means.plot(marker="o", figsize=(6, 4), ylabel="Mean systolic BP (mmHg)")
+fw.publish(ax.figure, slug="bp-trend", title="Systolic BP trend")
+plt.close(ax.figure)
+```
+
+A fitted statsmodels model becomes a structured summary: coefficients and fit
+statistics, never the data or a pickle.
+
+```{python}
+with open(root / "outputs/models/bp_ols.pkl", "rb") as f:
+    model = pickle.load(f)
+
+fw.publish(model, slug="bp-ols", title="OLS model of systolic BP")
+```
+
+A file on disk works the same way. Here, the PNG from notebook 05.
+
+```{python}
+fw.publish(root / "outputs/figures/bp_trend.png", slug="bp-trend-png",
+           title="Systolic BP trend (PNG)")
+```
+
+## Publish a notebook
+
+`publish_notebook()` renders a `.qmd` or `.ipynb` to HTML first, then publishes it.
+This one renders `bp-brief.qmd`, so it takes a few seconds. No `title` is given, so the
+title comes from the notebook's YAML: "Blood pressure brief".
+
+```{python}
+fw.publish_notebook(root / "notebooks/bp-brief.qmd", to="local", slug="bp-brief")
+```
+
+## Data files and folders
+
+`publish_data()` and `publish_dir()` follow the same destinations. `publish_data()`
+writes a DataFrame (CSV, Parquet, or JSON) and publishes it; the file name in `dest`
+becomes the slug.
+
+```{python}
+fw.publish_data(table, "bp_by_visit_data.csv")
+```
+
+`publish_dir()` publishes a folder as one artifact. `pattern` picks the files (a
+regular expression on their paths); here only the SVG figures.
+
+```{python}
+fw.publish_dir(root / "outputs/figures", dest="bp-figures", pattern=r"\.svg$")
+```
+
+`publish_list()` lists what the folder destination holds, one row per slug.
+
+```{python}
+fw.publish_list()
+```
+
+## Versions
+
+Publishing the same slug again adds a version. The latest sits at `published/<slug>/`
+and every version is kept under `v/<number>/`.
+
+```{python}
+fw.publish(table, slug="bp-by-visit", title="Blood pressure by visit")
+sorted(p.name for p in (root / "published/bp-by-visit/v").iterdir())
+```
+
+## What landed on disk
+
+The site index lists every artifact. Open `published/index.html` in a browser to click
+through the bundles; they work offline.
+
+```{python}
+site = root / "published"
+pd.DataFrame(json.loads((site / "index.json").read_text()))
+```
+
+Each bundle has a manifest, `artifact.json`, with a checksum for every file.
+
+```{python}
+manifest = json.loads((site / "bp-ols/artifact.json").read_text())
+{k: manifest[k] for k in ("slug", "title", "kind", "original", "generator")}
+```
+
+```{python}
+pd.DataFrame(manifest["files"])
+```
+
+## What a folder destination refuses
+
+Folder destinations have no access control, so passwords and unlisted links are refused
+before anything is written.
+
+```{python}
+for options in ({"visibility": "unlisted"}, {"password": "s3cret"}):
+    try:
+        fw.publish(table, slug="never-written", **options)
+    except fw.FrameworkError as error:
+        print(options, "->", error)
+```
+
+## Framework Cloud and storage buckets
+
+The remaining calls need a Framework Cloud login, a project token, or an S3 bucket.
+This machine has none of those, and the tour stays offline. `cloud_status()` only reads
+the local token store, so it is safe to run.
+
+```{python}
+connected = fw.cloud_status()
+connected
+```
+
+Cloud publishing is skipped unless connected. With a login it would publish to
+framework.pub (unlisted by default) and print the URL.
+
+```{python}
+if connected:
+    fw.publish(table, to="cloud", slug="bp-by-visit", title="Blood pressure by visit")
+    fw.publish_notebook(root / "notebooks/bp-brief.qmd", to="cloud")
+else:
+    print("Not connected: skipping cloud publishing. Run fw.cloud_login() to try it.")
+```
+
+Without a token or bucket these calls fail fast with a message that says what to set
+up. Nothing is sent anywhere. (`to="s3"` asks for a plain bucket upload.)
+
+```{python}
+calls = {
+    "ledger_list": lambda: fw.ledger_list(),
+    "ledger_push": lambda: fw.ledger_push(),
+    "cloud_settings": lambda: fw.cloud_settings(),
+    "storage_test": lambda: fw.storage_test(),
+    "publish_data to s3": lambda: fw.publish_data(table, "bp.csv", to="s3"),
+    "publish_list to s3": lambda: fw.publish_list(to="s3"),
+}
+for name, call in calls.items():
+    try:
+        call()
+    except (fw.CloudError, fw.FrameworkError) as error:
+        print(f"{name}: {str(error).splitlines()[0]}")
+```
+
+These are not run at all, because they change your account or your machine's login:
+`cloud_login()`, `cloud_logout()`, `cloud_sync()`, `skills_sync()`, and
+`structure_import()`. Try them by hand once you are logged in.

@@ -1,0 +1,87 @@
+---
+title: "Module 1: Blood Pressure Basics"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+jupyter: python3
+---
+
+A course module built on the shared study database. In a course project the notebooks
+folder is `modules/`, and everything renders to `rendered/`.
+
+```{python}
+#| label: setup
+import framework as fw
+import matplotlib.pyplot as plt
+
+root = fw.scaffold()
+```
+
+## The course layout
+
+A course has folders for modules, slides, assignments, course documents, readings, and
+data. `render_dirs` sends each one to its own folder under `rendered/`.
+
+```{python}
+fw.project_info()
+```
+
+```{python}
+fw.settings("render_dirs")
+```
+
+## This week's data
+
+Students query the study database through the `study` connection. Each row is one
+clinic visit.
+
+```{python}
+visits = fw.db_query(
+    """
+    SELECT v.participant_id, v.visit_number, v.systolic_bp, v.diastolic_bp,
+           p.treatment, p.age
+    FROM visits v JOIN participants p USING (participant_id)
+    WHERE v.systolic_bp IS NOT NULL
+    """,
+    "study",
+)
+visits.describe().round(1)
+```
+
+The extract is saved to `data/` with `data_save()` so the slides and the assignment read
+the same file. The catalog name `data.week1_visits` puts it in the course's `data`
+folder.
+
+```{python}
+fw.data_save(visits, "data.week1_visits", type="csv");
+fw.data_list()
+```
+
+## A first look
+
+How is systolic pressure distributed? Look for the long right tail.
+
+```{python}
+fig, ax = plt.subplots(figsize=(6, 3.5))
+ax.hist(visits["systolic_bp"], bins=30, color="#1f6fb2")
+ax.set(xlabel="Systolic BP (mmHg)", ylabel="Visits")
+plt.show()
+```
+
+The share of visits at or above 140 mmHg, by arm and visit. Discuss: why might this
+fall faster in one arm?
+
+```{python}
+(
+    visits.assign(high=visits["systolic_bp"] >= 140)
+    .groupby(["visit_number", "treatment"])["high"].mean()
+    .unstack().round(3)
+)
+```

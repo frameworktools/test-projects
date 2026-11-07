@@ -1,0 +1,190 @@
+---
+title: "05 · Saving outputs"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+The `save_*()` functions write tables, figures, models, and reports to the
+folders in `settings.yml` and record each one in `framework.db`, so
+`result_list()` can show what the project has produced. Run notebook 02 first:
+this one reads `inputs.final.bp_long`.
+
+```{r}
+bp_long <- data_read("inputs.final.bp_long")
+```
+
+## Tables
+
+Mean systolic pressure with a 95% confidence interval, by arm and visit.
+`mean_ci()` comes from `functions/bp_helpers.R`.
+
+```{r}
+sbp_by_visit <- bp_long |>
+  group_by(treatment, visit_number) |>
+  reframe(mean_ci(systolic_bp)) |>
+  mutate(across(c(mean, lower, upper), \(x) round(x, 1)))
+sbp_by_visit
+```
+
+`save_table()` writes CSV by default. Look for the path in the message; the
+folder is created on first use.
+
+```{r}
+save_table(sbp_by_visit, "sbp_by_visit")
+```
+
+Other formats: `xlsx` (needs writexl), `rds`, and `parquet` (needs arrow).
+
+```{r}
+save_table(sbp_by_visit, "sbp_by_visit", format = "xlsx")
+save_table(sbp_by_visit, "sbp_by_visit", format = "parquet")
+```
+
+## Figures
+
+The figure the tour is about: mean systolic pressure over visits, by arm. The
+intervention arm falls visit by visit while control stays flat.
+
+```{r}
+#| fig-width: 7
+#| fig-height: 4.5
+sbp_plot <- ggplot(sbp_by_visit, aes(visit_number, mean, colour = treatment)) +
+  geom_pointrange(aes(ymin = lower, ymax = upper), position = position_dodge(width = 0.2)) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  labs(
+    title = "Systolic pressure falls over visits in the intervention arm",
+    x = "Visit",
+    y = "Mean systolic pressure (mmHg, 95% CI)",
+    colour = NULL
+  ) +
+  theme(legend.position = "top")
+sbp_plot
+```
+
+`save_figure()` takes a ggplot (or saves the last plot when `plot = NULL`).
+Size is in inches.
+
+```{r}
+save_figure(sbp_plot, "sbp_trajectory", width = 7, height = 4.5)
+save_figure(sbp_plot, "sbp_trajectory", format = "pdf", width = 7, height = 4.5)
+```
+
+Base graphics work too: draw the plot, then call `save_figure()` with a name.
+
+```{r}
+hist(bp_long$systolic_change, breaks = 30,
+     main = "Change in systolic pressure from first visit", xlab = "mmHg")
+save_figure(name = "sbp_change_histogram", width = 6, height = 4)
+```
+
+## Models
+
+A mixed model of systolic pressure over visits, with a random intercept per
+participant. `save_model()` stores the fitted object as RDS.
+
+```{r}
+bp_model <- lme4::lmer(
+  systolic_bp ~ visit_number * treatment + age + sex + (1 | participant_id),
+  data = bp_long
+)
+save_model(bp_model, "sbp_mixed_model")
+```
+
+The saved model reads back as the same object.
+
+```{r}
+reloaded <- readRDS("outputs/models/sbp_mixed_model.rds")
+lme4::fixef(reloaded)
+```
+
+## Notebooks and reports
+
+`save_notebook()` renders a Quarto document and saves the HTML to
+`outputs/notebooks/`. Here it renders the short report in
+`docs/bp-summary.qmd`, which reads the table and figure saved above.
+
+```{r}
+save_notebook("docs/bp-summary.qmd")
+```
+
+`save_report()` copies a finished file into `outputs/reports/` under a new
+name, for example the version you sent to the study team.
+
+```{r}
+save_report("outputs/notebooks/bp-summary.html", name = "bp-summary-2026-11")
+```
+
+## What's been saved
+
+`result_list()` reads the results table in `framework.db`. Each result is
+named by its path, with a hash and timestamps.
+
+```{r}
+result_list()
+```
+
+Filter by type.
+
+```{r}
+result_list(type = "figure")[, c("name", "updated_at")]
+```
+
+## capture_output()
+
+`capture_output()` runs an expression and returns its console output, its
+value, and whether it errored, instead of printing. Handy for logging a model
+summary.
+
+```{r}
+captured <- capture_output(print(summary(bp_model)$coefficients[, 1:2]))
+captured$status
+head(captured$console_output, 4)
+```
+
+An error doesn't stop the notebook; it comes back in `result`.
+
+```{r}
+failed <- capture_output(stop("model did not converge"))
+failed$status
+conditionMessage(failed$result)
+```
+
+## Scratch files
+
+`scratch_capture()` dumps an object to `scratch/` (gitignored) for a quick
+look outside R. Data frames become TSV and vectors become text; the file name
+comes from the object name.
+
+```{r}
+high_readings <- bp_long |> filter(systolic_bp >= 160) |> select(participant_id, visit_number, systolic_bp)
+scratch_capture(high_readings)
+scratch_capture(unique(bp_long$site_name), name = "site_names")
+scratch_capture(bp_model, name = "sbp_model_snapshot", to = "rds")
+list.files("scratch")
+```
+
+`scratch_clean()` empties the top of `scratch/`.
+
+```{r}
+scratch_clean()
+list.files("scratch")
+```

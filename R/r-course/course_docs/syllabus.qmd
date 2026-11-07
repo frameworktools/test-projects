@@ -1,0 +1,37 @@
+---
+title: "Syllabus: Analyzing a blood pressure trial in R"
+date: "2026-11-07"
+format: html
+---
+
+```{r}
+#| include: false
+library(framework)
+scaffold()
+```
+
+## Course materials
+
+| Folder | What's in it |
+|--------|--------------|
+| `slides/` | Weekly reveal.js decks |
+| `modules/` | Worked notebooks to run along with |
+| `assignments/` | Weekly problems |
+| `readings/` | Papers and chapters |
+| `data/` | Datasets saved by the modules |
+
+## The data
+
+All code reads the shared study database through the `study` connection.
+Its tables:
+
+```{r}
+study_tables <- db_with("study", DBI::dbListTables(conn))
+study_tables
+```
+
+## Schedule
+
+| Week | Topic | Slides | Module | Assignment |
+|------|-------|--------|--------|------------|
+| 1 | Meet the study | `01-meet-the-study` | `01-blood-pressure-by-arm` | `assignment-01-weight-change` |

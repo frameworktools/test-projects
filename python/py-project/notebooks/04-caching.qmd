@@ -1,0 +1,143 @@
+---
+title: "04 Caching"
+subtitle: "cache_remember, cache, cache_get, cache_list, cache_forget, cache_flush"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+jupyter: python3
+---
+
+The cache keeps the result of slow steps between sessions, in `outputs/cache/` with a
+record in `framework.db`. DataFrames are stored as Parquet, anything else with pickle.
+Run this notebook twice: the second time, the slow step is skipped.
+
+```{python}
+#| label: setup
+import time
+
+import framework as fw
+import statsmodels.formula.api as smf
+
+root = fw.scaffold()
+```
+
+## cache_remember with a function
+
+`cache_remember()` returns the cached value, or computes it, stores it, and returns it.
+The model below is a linear mixed model of systolic blood pressure over visits, with a
+random intercept per participant. Look at the elapsed time.
+
+```{python}
+bp = fw.data_read("inputs.intermediate.bp_visits")
+
+def fit_bp_model():
+    model = smf.mixedlm(
+        "systolic_bp ~ visit_number * treatment + age + sex",
+        data=bp,
+        groups=bp["participant_id"],
+    )
+    return model.fit().params
+
+start = time.perf_counter()
+params = fw.cache_remember("bp_mixed_params", fit_bp_model)
+print(f"{time.perf_counter() - start:.3f} s")
+params.round(2)
+```
+
+The second call finds the value, so it returns at once. The
+`visit_number:treatment[T.intervention]` term is the extra drop per visit in the
+intervention arm.
+
+```{python}
+start = time.perf_counter()
+params = fw.cache_remember("bp_mixed_params", fit_bp_model)
+print(f"{time.perf_counter() - start:.3f} s")
+```
+
+`refresh=True` recomputes even when the value is cached.
+
+```{python}
+params = fw.cache_remember("bp_mixed_params", fit_bp_model, refresh=True)
+```
+
+## cache_remember as a decorator
+
+As a decorator it caches the function's result under the given name, here for 30
+minutes. The participant summary is a DataFrame, so it is stored as Parquet.
+
+```{python}
+@fw.cache_remember("site_summary", expire_after="30 minutes")
+def site_summary():
+    return fw.db_query(
+        """
+        SELECT site_name, setting, COUNT(*) AS n,
+               ROUND(AVG(mean_systolic_bp), 1) AS mean_systolic
+        FROM participant_summary
+        GROUP BY site_name, setting
+        """,
+        "study",
+    )
+
+site_summary()
+```
+
+## Storing and reading values directly
+
+`cache()` stores a value and returns it. `cache_get()` reads it, with a default for a
+missing or expired value.
+
+```{python}
+n_participants = fw.cache("n_participants", bp["participant_id"].nunique())
+print(fw.cache_get("n_participants"))
+print(fw.cache_get("not_cached", default="(nothing cached)"))
+```
+
+Expiry takes hours as a number, or a string with seconds, minutes, hours, days, or
+weeks. This value expires after two seconds, so the read after the pause gets the default.
+
+```{python}
+fw.cache("short_lived", "gone soon", expire_after="2 seconds")
+print(fw.cache_get("short_lived"))
+time.sleep(2.5)
+fw.cache_get("short_lived", default="(expired)")
+```
+
+`file=` stores a value in a file of your choosing instead of the cache folder.
+
+```{python}
+target = root / fw.settings("cache") / "custom" / "bp_params.pickle"
+target.parent.mkdir(parents=True, exist_ok=True)
+fw.cache("bp_params_file", params, file=target)
+fw.cache_get("bp_params_file", file=target).head(3)
+```
+
+## Inspecting and clearing
+
+`cache_list()` shows every record with its timestamps and status. Look at the expiry on
+`site_summary`.
+
+```{python}
+fw.cache_list()[["name", "expire_at", "last_read_at", "status"]]
+```
+
+`cache_forget()` removes one value and its record.
+
+```{python}
+fw.cache_forget("n_participants")
+fw.cache_list()["name"].tolist()
+```
+
+`cache_flush()` removes everything, including values cached from R. It is commented out
+so the next run of this notebook can show a cache hit. Uncomment it to start over.
+
+```{python}
+# fw.cache_flush()
+sorted(p.name for p in (root / fw.settings("cache")).iterdir())
+```

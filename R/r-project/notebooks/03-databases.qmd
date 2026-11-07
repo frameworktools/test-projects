@@ -1,0 +1,259 @@
+---
+title: "03 · Databases"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+This project has three connections in `settings/connections.yml`:
+
+- `study`: the shared study database at `../../shared/study.sqlite`, which
+  the R, Python, and Stata projects all use. It has `read_only: true`, so
+  Framework opens it read-only.
+- `analysis`: a local SQLite file (`analysis.sqlite`, gitignored) for the
+  write demos.
+- `framework`: Framework's own `framework.db`, which holds the catalog,
+  results, and cache records.
+
+## What's configured
+
+`connections_list()` shows database and object storage connections;
+`db_list()` shows databases only. SQLite paths are relative to the project
+root, not to `notebooks/`.
+
+```{r}
+connections_list()
+```
+
+```{r}
+db_list()
+```
+
+`db_drivers_status()` reports which DBI driver packages are installed, and
+`db_drivers_install()` installs missing ones.
+
+```{r}
+db_drivers_status()
+```
+
+## Querying the study database
+
+`db_query()` opens the connection, runs the query, and closes it. This counts
+enrolment by site and arm. Look for a roughly even split within each site.
+
+```{r}
+db_query(
+  "SELECT s.site_name, s.setting, p.treatment, COUNT(*) AS n
+   FROM participants p
+   JOIN sites s ON s.site_id = p.site_id
+   GROUP BY s.site_name, s.setting, p.treatment
+   ORDER BY s.site_name, p.treatment",
+  "study"
+)
+```
+
+Extra arguments go to `DBI::dbGetQuery()`, so parameterized queries work.
+This pulls the intervention arm's visits for participants 60 and older.
+
+```{r}
+older_intervention <- db_query(
+  "SELECT v.participant_id, v.visit_number, v.systolic_bp
+   FROM visits v
+   JOIN participants p ON p.participant_id = v.participant_id
+   WHERE p.treatment = ? AND p.age >= ?",
+  "study",
+  params = list("intervention", 60)
+)
+nrow(older_intervention)
+head(older_intervention)
+```
+
+Views work like tables. `participant_summary` has one row per participant.
+
+```{r}
+db_query("SELECT * FROM participant_summary LIMIT 5", "study")
+```
+
+## Several queries on one connection
+
+`db_with()` opens one connection, makes it available as `conn` inside the
+block, and closes it afterwards, even on error. Use it when you need more
+than one query.
+
+```{r}
+mean_sbp_by_visit <- db_with("study", {
+  tables <- DBI::dbListTables(conn)
+  message("Tables: ", paste(tables, collapse = ", "))
+
+  DBI::dbGetQuery(conn, "
+    SELECT p.treatment, v.visit_number,
+           COUNT(v.systolic_bp) AS n,
+           ROUND(AVG(v.systolic_bp), 1) AS mean_systolic
+    FROM visits v
+    JOIN participants p ON p.participant_id = v.participant_id
+    GROUP BY p.treatment, v.visit_number
+    ORDER BY p.treatment, v.visit_number")
+})
+mean_sbp_by_visit
+```
+
+Fewer participants have visits 3 and 4, so later means rest on smaller groups.
+
+## Managing a connection yourself
+
+`db_connect()` returns a DBI connection that you close yourself. Use it for
+interactive work with DBI or dbplyr.
+
+```{r}
+conn <- db_connect("study")
+DBI::dbListFields(conn, "survey")
+DBI::dbGetQuery(conn, "SELECT satisfaction, COUNT(*) AS n FROM survey GROUP BY satisfaction")
+DBI::dbDisconnect(conn)
+```
+
+## The study connection is read-only
+
+`read_only: true` in the connection's settings opens the SQLite file
+read-only. It works even on a file you don't have write permission for.
+
+```{r}
+settings("connections.databases.study")
+```
+
+`db_execute()` refuses a read-only connection before it touches the database.
+Look for "is read-only".
+
+```{r}
+#| error: true
+db_execute("DELETE FROM visits WHERE systolic_bp IS NULL", "study")
+```
+
+`db_transaction()` refuses it too.
+
+```{r}
+#| error: true
+db_with("study", {
+  db_transaction(conn, {
+    DBI::dbExecute(conn, "UPDATE participants SET bmi = NULL")
+  })
+})
+```
+
+Even raw DBI calls on the connection fail, because SQLite itself opened the
+file read-only.
+
+```{r}
+#| error: true
+db_with("study", DBI::dbExecute(conn, "DROP VIEW participant_summary"))
+```
+
+Reads are unaffected.
+
+```{r}
+db_query("SELECT COUNT(*) AS n_visits FROM visits", "study")
+```
+
+## Writing to the local database
+
+The write demos use the `analysis` connection. `db_execute()` runs a statement
+and returns the number of rows affected.
+
+```{r}
+db_execute("DROP TABLE IF EXISTS site_bp", "analysis")
+db_execute(
+  "CREATE TABLE site_bp (
+     site_name TEXT,
+     treatment TEXT,
+     n INTEGER,
+     mean_systolic REAL,
+     PRIMARY KEY (site_name, treatment)
+   )",
+  "analysis"
+)
+```
+
+Summaries computed from the study database are written into the local one.
+
+```{r}
+site_bp <- db_query(
+  "SELECT site_name, treatment, COUNT(*) AS n, ROUND(AVG(mean_systolic_bp), 1) AS mean_systolic
+   FROM participant_summary GROUP BY site_name, treatment",
+  "study"
+)
+
+db_with("analysis", {
+  DBI::dbAppendTable(conn, "site_bp", site_bp)
+})
+db_query("SELECT * FROM site_bp", "analysis")
+```
+
+`db_execute()` also takes `params`.
+
+```{r}
+db_execute(
+  "UPDATE site_bp SET mean_systolic = ROUND(mean_systolic, 0) WHERE treatment = ?",
+  "analysis",
+  params = list("control")
+)
+```
+
+## Transactions
+
+`db_transaction()` runs a block on a connection and commits only if every
+statement succeeds. This one adds a flag column and fills it in.
+
+```{r}
+db_with("analysis", {
+  db_transaction(conn, {
+    DBI::dbExecute(conn, "ALTER TABLE site_bp ADD COLUMN above_130 INTEGER")
+    DBI::dbExecute(conn, "UPDATE site_bp SET above_130 = mean_systolic >= 130")
+  })
+})
+db_query("SELECT * FROM site_bp ORDER BY mean_systolic DESC", "analysis")
+```
+
+The second transaction deletes the control rows and then hits a duplicate key.
+The error rolls the whole block back, so the row count stays at 8. Look for
+"Transaction failed and was rolled back".
+
+```{r}
+#| error: true
+db_with("analysis", {
+  db_transaction(conn, {
+    DBI::dbExecute(conn, "DELETE FROM site_bp WHERE treatment = 'control'")
+    DBI::dbExecute(conn, "INSERT INTO site_bp (site_name, treatment) VALUES ('North Clinic', 'intervention')")
+  })
+})
+```
+
+```{r}
+db_query("SELECT COUNT(*) AS rows_after_rollback FROM site_bp", "analysis")
+```
+
+## Inside framework.db
+
+The `framework` connection is Framework's own bookkeeping. You can read it like
+any database: the `data` table holds the catalog hashes from notebook 02.
+
+```{r}
+db_query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name", "framework")
+db_query("SELECT name, type, locked, substr(hash, 1, 12) AS hash FROM data", "framework")
+```

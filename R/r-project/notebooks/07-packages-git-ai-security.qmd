@@ -1,0 +1,240 @@
+---
+title: "07 · Packages, git, AI context, security, and the session"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+The last stop covers the project plumbing: the package list, renv, git
+helpers, the AI assistant files, the security audit, and tidying the R
+session.
+
+## Packages
+
+`packages_list()` shows the packages in `settings/packages.yml` and whether
+scaffold() attaches each one.
+
+```{r}
+packages_list()
+```
+
+`package_add()` records a package in settings and installs it if needed. Use
+it instead of `install.packages()` so the project remembers the dependency.
+broom tidies model output; open `settings/packages.yml` after this chunk to see
+the new entry.
+
+```{r}
+package_add("broom")
+tail(readLines("settings/packages.yml"), 4)
+```
+
+```{r}
+bp_long <- data_read("inputs.final.bp_long")
+bp_lm <- lm(systolic_change ~ treatment + age + sex, data = bp_long, subset = visit_number > 1)
+broom::tidy(bp_lm, conf.int = TRUE)
+```
+
+`packages_install()` installs anything in the list that's missing. Everything
+is installed here, so it has nothing to do.
+
+```{r}
+packages_install()
+```
+
+## renv
+
+renv is off in this project. `packages_status()` still reports whether each
+package in settings is installed, and says there's no lockfile to compare
+with.
+
+```{r}
+renv_enabled()
+```
+
+```{r}
+packages_status()
+```
+
+Turning renv on creates a project library and `renv.lock`, which takes a
+while and changes the project, so these are shown but not run.
+`renv_disable()` turns it off again and keeps the lockfile.
+
+```{r}
+#| eval: false
+renv_enable()
+packages_snapshot()
+packages_status()
+packages_restore()
+packages_update("dplyr")
+renv_disable()
+```
+
+## Git helpers
+
+These wrap git for the repository the project sits in. Here that's the
+`framework-test-projects` repo; `git_status()` says so first, and paths are
+relative to this project.
+
+```{r}
+git_status(short = TRUE)
+```
+
+```{r}
+git_log(n = 5)
+```
+
+`git_diff()` shows unstaged changes to tracked files. This project isn't
+committed yet, so there's nothing to show.
+
+```{r}
+git_diff()
+```
+
+`git_add()`, `git_commit()`, `git_push()`, and `git_pull()` change the
+repository, so they aren't run here.
+
+```{r}
+#| eval: false
+git_add("notebooks/")
+git_commit("Add hand-testing notebooks")
+git_push()
+git_pull()
+```
+
+## Pre-commit hooks
+
+Framework can install a pre-commit hook that blocks commits of private data
+or secrets. `git_hooks_list()` shows which checks are on.
+
+```{r}
+git_hooks_list()
+```
+
+Hooks belong to a repository, and this project sits inside the shared test
+repo. `git_hooks_install()` refuses rather than installing hooks for the
+enclosing repository; look for "inside the git repository".
+
+```{r}
+#| error: true
+git_hooks_install()
+```
+
+In a project that is its own repository (`git init` at its top), these turn
+the data security hook on and off.
+
+```{r}
+#| eval: false
+git_hooks_enable("data_security")
+git_hooks_install()
+git_hooks_disable("data_security")
+git_hooks_uninstall()
+```
+
+## Security audit
+
+`git_security_audit()` checks that private folders are gitignored, that no
+data or secrets are tracked now or in history, and lists data files outside
+the configured folders that git would pick up. The `local-site/` bundles from
+notebook 06 and `analysis.sqlite` from notebook 03 sit outside the configured
+folders, but they're gitignored, so they aren't reported.
+
+```{r}
+audit <- git_security_audit()
+```
+
+The result is a list you can work with. `summary` has one row per check.
+
+```{r}
+audit$summary
+```
+
+A data file outside the configured folders that isn't ignored does show up.
+This writes one to the project root (the `./` makes `data_save()` read it as a path, not a catalog name), audits, and removes it.
+
+```{r}
+data_save(head(bp_long), "./bp_preview.csv")
+audit <- git_security_audit(check_git_history = FALSE, verbose = FALSE)
+audit$findings$orphaned_files$path
+unlink("bp_preview.csv")
+```
+
+## AI assistant context
+
+Projects keep one `AGENTS.md` for AI assistants (`CLAUDE.md` points to it)
+plus skills in `.claude/skills/`. `ai_generate_context()` returns what a fresh
+`AGENTS.md` would say without writing anything.
+
+```{r}
+fresh_context <- ai_generate_context(project_name = "r-project", project_type = "project")
+cat(head(strsplit(fresh_context, "\n")[[1]], 25), sep = "\n")
+```
+
+`ai_regenerate_context()` rewrites only the sections of `AGENTS.md` marked
+`<!-- @framework:regenerate -->`. After `package_add("broom")` above, the
+installed packages section now lists broom.
+
+```{r}
+ai_regenerate_context()
+agents <- readLines("AGENTS.md")
+grep("broom", agents, value = TRUE)
+```
+
+`ai_skills_update()` refreshes the Framework skills in `.claude/skills/` from
+the installed package version, for after you upgrade framework. It reports
+which skills it changed and which were already current.
+
+```{r}
+ai_skills_update()
+```
+
+`ai_sync_context()` is deprecated: with one `AGENTS.md` there is nothing to
+sync.
+
+```{r}
+ai_sync_context()
+```
+
+## The R session
+
+`env_summary()` describes the session: R version, attached packages, and the
+largest objects in an environment.
+
+```{r}
+env_summary(envir = globalenv())
+```
+
+`env_clear()` removes objects, closes plots, and detaches packages, keeping
+what you name. Framework stays attached.
+
+```{r}
+env_clear(keep = "bp_long", envir = globalenv())
+ls(globalenv())
+```
+
+## Not run here
+
+- `docs_export()` builds the documentation database for the package's GUI
+  and website from `man/`. It's a tool for the package itself.
+- `project_add_directory(".", "inputs_reference", "Reference", "inputs/reference")`
+  adds a directory to `settings.yml` and creates it. It rewrites
+  `settings.yml`, so try it by hand and look at the diff.
+- `load_settings_catalog()` returns the catalog of settings the GUI edits.
+- `bootstrap_project_init()` writes a legacy `init.R`.

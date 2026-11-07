@@ -1,0 +1,204 @@
+---
+title: "06 · Publishing"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+`publish()` sends results to a named destination. This project's
+`settings.yml` defines one folder destination, `local-site`, which is a
+gitignored folder in the project (a relative `path:` starts at the project
+root), and makes it the default. Each publish adds
+a versioned bundle with an offline reader page and a SHA-256 manifest. Run
+notebooks 02 and 05 first: this one publishes what 05 saved.
+
+```{r}
+settings("publish")
+```
+
+To start from an empty site, remove what earlier runs published.
+
+```{r}
+unlink("local-site", recursive = TRUE)
+```
+
+## Publishing R objects
+
+A data frame becomes a table with every row and a profile of each column.
+`slug` names the folder; `title` is what the site index shows.
+
+```{r}
+bp_long <- data_read("inputs.final.bp_long")
+sbp_by_visit <- data_read("outputs/tables/sbp_by_visit.csv")
+
+publish(sbp_by_visit, slug = "sbp-by-visit", title = "Mean systolic pressure by arm and visit")
+```
+
+A fitted model becomes coefficients, standard errors, 95% intervals, and fit
+statistics. The observations stay behind.
+
+```{r}
+bp_model <- readRDS("outputs/models/sbp_mixed_model.rds")
+publish(bp_model, slug = "sbp-mixed-model", title = "Mixed model of systolic pressure",
+        description = "Random intercept per participant; visit by arm interaction.")
+```
+
+A hypothesis test becomes a test summary. This compares the change from first
+to last visit between arms.
+
+```{r}
+last_visit_change <- bp_long |>
+  group_by(participant_id, treatment) |>
+  filter(visit_number == max(visit_number), visit_number > 1) |>
+  ungroup() |>
+  # A missing reading at the last visit leaves no change to compare
+  filter(!is.na(systolic_change))
+
+change_test <- t.test(systolic_change ~ treatment, data = last_visit_change)
+change_test
+publish(change_test, slug = "sbp-change-ttest", title = "Change in systolic pressure, first to last visit")
+```
+
+A ggplot becomes an SVG figure.
+
+```{r}
+change_plot <- ggplot(last_visit_change, aes(treatment, systolic_change)) +
+  geom_boxplot(outlier.alpha = 0.4) +
+  labs(x = NULL, y = "Change in systolic pressure (mmHg)")
+publish(change_plot, slug = "sbp-change-boxplot", title = "Change in systolic pressure by arm")
+```
+
+## Publishing files
+
+A saved file publishes as is.
+
+```{r}
+publish("outputs/figures/sbp_trajectory.png", title = "Systolic pressure trajectory")
+```
+
+Publishing the same slug again adds a version. Look for `v/1` and `v/2` in the
+folder listing further down.
+
+```{r}
+publish(sbp_by_visit, slug = "sbp-by-visit", title = "Mean systolic pressure by arm and visit (rerun)")
+```
+
+## Publishing a notebook
+
+`publish_notebook()` renders a Quarto document and publishes the HTML. This
+renders `docs/bp-summary.qmd`, so it takes a few seconds. The title comes from
+the document's YAML (`title:`); pass `title` or `description` to override.
+
+```{r}
+publish_notebook("docs/bp-summary.qmd", slug = "bp-summary")
+```
+
+## What's on the site
+
+The site index lists every artifact. Open `local-site/index.html` in a
+browser, then click through to the reader pages.
+
+```{r}
+site_index <- jsonlite::read_json("local-site/index.json")
+vapply(site_index$artifacts, function(a) paste0(a$slug, " (v", a$version, "): ", a$title), "")
+```
+
+Each artifact folder holds the files, an `artifact.json` manifest, and `v/`
+with every version.
+
+```{r}
+list.files("local-site/sbp-by-visit", recursive = TRUE)
+```
+
+## publish_data(), publish_dir(), and publish_list()
+
+These follow `publish.default` too, and take `to` to pick another
+destination. `publish_data()` writes a data frame in the format you ask for
+(CSV, RDS, Parquet, or JSON) without the table reader that `publish()` adds;
+the name of `dest` becomes the slug.
+
+```{r}
+publish_data(sbp_by_visit, "sbp_by_visit_data.parquet", format = "parquet")
+```
+
+`publish_dir()` publishes a whole folder as one artifact.
+
+```{r}
+publish_dir("outputs/figures", dest = "all-figures")
+```
+
+`publish_list()` lists what's at the destination, with sizes, times, and the
+local reader page for each artifact.
+
+```{r}
+publish_list()
+```
+
+## Framework Cloud and GitHub Pages (not run)
+
+These need a Framework Cloud login or a project token in `.env`, which this
+offline project doesn't have. `cloud_status()` is safe to run and shows the
+connection state.
+
+```{r}
+cloud_status()
+```
+
+The rest are shown but not run:
+
+- `cloud_login()` and `cloud_logout()` connect this machine to Framework
+  Cloud.
+- `publish(..., to = "cloud")` publishes to Cloud, where `visibility`,
+  `password`, and `collection` work. On a folder destination they stop with
+  an error before anything is written.
+- `publish(..., to = "github")` commits and pushes a bundle to the project's
+  GitHub Pages site.
+- `ledger_list()` and `ledger_push()` read and push the project's data hash
+  ledger on Cloud; `data_save()` pushes quietly when a project token exists.
+- `cloud_sync()` and `cloud_settings()` sync your global settings with Cloud.
+- `skills_sync()` and `structure_import()` send skills and folder layouts to
+  your Cloud account.
+- `storage_test()` checks S3 credentials.
+
+```{r}
+#| eval: false
+cloud_login()
+publish(bp_model, to = "cloud", slug = "sbp-mixed-model", visibility = "public")
+publish("outputs/notebooks/bp-summary.html", to = "github", slug = "bp-summary")
+ledger_list("inputs.final.bp_long")
+ledger_push()
+cloud_sync()
+storage_test()
+```
+
+Without a token, the ledger functions stop with a clear message.
+
+```{r}
+#| error: true
+ledger_list()
+```
+
+A Cloud-only option on a folder destination fails before delivery.
+
+```{r}
+#| error: true
+publish(sbp_by_visit, slug = "sbp-by-visit", password = "secret")
+```

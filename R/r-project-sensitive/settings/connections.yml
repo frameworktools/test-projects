@@ -1,0 +1,14 @@
+connections:
+  default_database: framework
+  databases:
+    framework:
+      driver: sqlite
+      database: framework.db
+    # Shared study database used by the R, Python, and Stata test projects.
+    # Paths are relative to the project root; read_only: true opens it
+    # read-only.
+    study:
+      driver: sqlite
+      database: ../../shared/study.sqlite
+      read_only: true
+  storage_buckets: {}

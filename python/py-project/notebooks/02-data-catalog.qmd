@@ -1,0 +1,217 @@
+---
+title: "02 Data Catalog"
+subtitle: "data_add, data_list, data_info, data_read, data_save, data_verify"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+jupyter: python3
+---
+
+The data catalog names each data file (`inputs.raw.visits`), records how to read it, and
+keeps a SHA-256 hash of it in `framework.db`. Reads by name are checked against that
+hash. This notebook builds the catalog the later notebooks use.
+
+```{python}
+#| label: setup
+import shutil
+import warnings
+
+import framework as fw
+
+root = fw.scaffold()
+```
+
+## Bring in the raw files
+
+The study's CSV exports live outside the project in `shared/csv/`. A catalog entry for a
+file outside the project would store an absolute path, so the files are copied into
+`inputs/raw/` first. Raw files are treated as read-only from here on.
+
+```{python}
+shared_csv = root.parent.parent / "shared" / "csv"
+raw = root / fw.settings("inputs_raw")
+
+for name in ("participants", "visits", "labs", "survey", "sites"):
+    shutil.copy(shared_csv / f"{name}.csv", raw / f"{name}.csv")
+
+sorted(p.name for p in raw.iterdir())
+```
+
+## Add files to the catalog
+
+`data_add()` registers a file, records its hash, and writes the entry to
+`settings/data.yml`. The name comes from the folder: a file in `inputs/raw` becomes
+`inputs.raw.<file>`. Look at the returned entry: the path is relative to the root.
+
+```{python}
+fw.data_add(raw / "participants.csv")
+```
+
+Files are locked by default, so a changed file stops the next read. The survey export
+gets refreshed, so it is added unlocked and only warns on change.
+
+```{python}
+fw.data_add(raw / "visits.csv")
+fw.data_add(raw / "labs.csv")
+fw.data_add(raw / "sites.csv")
+fw.data_add(raw / "survey.csv", locked=False)
+```
+
+## List and inspect
+
+`data_list()` shows every entry. Check the `locked` column for the survey file.
+
+```{python}
+fw.data_list()
+```
+
+`data_info()` says how a name will be read: the absolute path, type, delimiter, and lock.
+
+```{python}
+fw.data_info("inputs.raw.visits")
+```
+
+The entries live in `settings/data.yml`, which git tracks, so the catalog travels with
+the project.
+
+```{python}
+print((root / "settings" / "data.yml").read_text())
+```
+
+## Read by name
+
+`data_read()` returns a pandas DataFrame and checks the file's hash first. Missing
+blood pressure readings come through as `NaN`.
+
+```{python}
+visits = fw.data_read("inputs.raw.visits")
+visits.head()
+```
+
+```{python}
+visits[["systolic_bp", "diastolic_bp", "weight_kg"]].isna().sum()
+```
+
+A path with a slash reads a file directly, without the catalog or the hash check. A
+relative path starts at the project root, so this works from `notebooks/` too.
+
+```{python}
+fw.data_read("inputs/raw/sites.csv")
+```
+
+## Clean and save
+
+A typical first step: join visits to participants, drop visits without a blood pressure
+reading, and keep the analysis columns.
+
+```{python}
+participants = fw.data_read("inputs.raw.participants")
+
+bp = (
+    visits.merge(participants, on="participant_id")
+    .dropna(subset=["systolic_bp", "diastolic_bp"])
+    [["participant_id", "site_id", "treatment", "sex", "age", "bmi", "smoker",
+      "visit_number", "visit_date", "systolic_bp", "diastolic_bp", "weight_kg"]]
+)
+bp.shape
+```
+
+`data_save()` takes a catalog name, picks the folder from it (`inputs.intermediate.*`
+goes to `inputs/intermediate/`), writes Parquet by default, and catalogs the result.
+It returns the data so it can end a pipeline; the `;` hides that here.
+
+```{python}
+fw.data_save(bp, "inputs.intermediate.bp_visits");
+```
+
+An extension on the name picks the format: `inputs.final.bp_analysis.csv` is the catalog
+name `inputs.final.bp_analysis`, written as CSV. (`type="csv"` does the same.) This is
+the analysis-ready file for later notebooks.
+
+```{python}
+final = bp.assign(visit_date=lambda d: d["visit_date"].astype(str))
+fw.data_save(final, "inputs.final.bp_analysis.csv")
+fw.data_list()
+```
+
+## Save a database extract
+
+Data can come from a database too. Here the `participant_summary` view from the shared
+`study` database is saved and cataloged, so later reads are hash-checked like any file.
+
+```{python}
+summary = fw.db_query("SELECT * FROM participant_summary", "study")
+fw.data_save(summary, "inputs.intermediate.participant_summary")
+fw.data_read("inputs.intermediate.participant_summary").head()
+```
+
+## Verify integrity
+
+`data_verify()` compares a file with its recorded hash (and the cloud ledger when the
+project has a token; this one doesn't). Look for `[ok]`.
+
+```{python}
+fw.data_verify("inputs.raw.participants")
+```
+
+Now a deliberate change. A locked file that changes raises `IntegrityError` on the next
+read. The demo uses its own small file, so the real inputs stay intact.
+
+```{python}
+demo = participants.head(5)
+fw.data_save(demo, "inputs.intermediate.integrity_demo", type="csv")
+
+path = fw.data_info("inputs.intermediate.integrity_demo").path
+with open(path, "a") as f:
+    f.write("999,1,2024-01-01,50,male,25.0,0,control\n")
+
+try:
+    fw.data_read("inputs.intermediate.integrity_demo")
+except fw.IntegrityError as error:
+    print(type(error).__name__, error, sep=": ")
+```
+
+`data_verify()` reports the same mismatch, as a warning and `False`.
+
+```{python}
+fw.data_verify("inputs.intermediate.integrity_demo")
+```
+
+An unlocked file only warns with `DataChangedWarning` and reads the new contents.
+
+```{python}
+fw.data_save(demo, "inputs.intermediate.integrity_demo", type="csv", locked=False)
+with open(path, "a") as f:
+    f.write("998,2,2024-01-02,61,female,31.0,1,intervention\n")
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    rows = len(fw.data_read("inputs.intermediate.integrity_demo"))
+print(rows, "rows;", [w.category.__name__ for w in caught])
+```
+
+Saving through `data_save()` again records the new hash, which is how an intended
+change is accepted. There is no function to drop a catalog entry, so the demo file stays.
+
+```{python}
+fw.data_save(demo, "inputs.intermediate.integrity_demo", type="csv")
+fw.data_verify("inputs.intermediate.integrity_demo")
+```
+
+## Errors you will meet
+
+A misspelled name raises `DataNotFoundError`.
+
+```{python}
+try:
+    fw.data_read("inputs.raw.vists")
+except fw.DataNotFoundError as error:
+    print(error)
+```

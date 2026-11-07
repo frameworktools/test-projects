@@ -1,0 +1,21 @@
+---
+title: "Syllabus"
+author: "Your Name"
+date: "2026-11-07"
+---
+
+## Course
+
+An introduction to analyzing repeated clinical measurements, using a fictional blood
+pressure cohort.
+
+## Schedule
+
+| Week | Module | Slides | Assignment |
+|------|--------|--------|------------|
+| 1 | Blood pressure basics | Week 1 | Assignment 1 |
+
+## Rendering
+
+Run `uv run quarto render` from the course folder. Pages go to `rendered/`: modules to
+`rendered/modules/`, slides to `rendered/slides/`, and so on.

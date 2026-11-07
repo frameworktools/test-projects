@@ -1,0 +1,32 @@
+---
+title: "Blood pressure by arm: summary"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: false
+    code-fold: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+A short report built from the outputs saved in notebook 05. Notebook 05
+renders it with `save_notebook()`, and notebook 06 publishes it with
+`publish_notebook()`.
+
+```{r}
+sbp_by_visit <- data_read("outputs/tables/sbp_by_visit.csv")
+knitr::kable(sbp_by_visit, digits = 1, caption = "Mean systolic pressure (mmHg) by arm and visit")
+```
+
+![Mean systolic pressure by visit and arm](../outputs/figures/sbp_trajectory.png)

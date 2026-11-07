@@ -1,0 +1,269 @@
+---
+title: "01 · Setup, scaffold, and settings"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+This is the first stop in the tour. It shows what `scaffold()` does when a
+notebook starts, how to read the project's settings, and the helpers that
+describe the project. Nothing here changes your data.
+
+## scaffold()
+
+Every notebook and script starts with these two lines. Watch the messages:
+scaffold() finds the project root, loads `.env`, attaches the packages marked
+`auto_attach` in `settings/packages.yml`, sources `functions/`, sets the
+ggplot2 theme from `settings/scaffold.yml` (once; `scaffold.R` no longer sets
+it again), and creates `framework.db` on the first run.
+
+```{r}
+#| label: setup
+library(framework)
+scaffold()
+```
+
+The notebook lives in `notebooks/`, but code now runs from the project root,
+so relative paths such as `inputs/raw` work the same everywhere.
+
+```{r}
+getwd()
+standardize_wd()
+```
+
+The helpers in `functions/bp_helpers.R` were sourced by scaffold(), so
+`classify_bp()` is ready without `source()`.
+
+```{r}
+classify_bp(systolic = c(118, 126, 134, 150), diastolic = c(76, 78, 84, 95))
+```
+
+## Project overview
+
+`status()` is the one-screen health check: project type, git, AI files, renv,
+directories (`ok` or `lazy`), and connections. The `study` connection is the
+shared database, and `analysis` is a local scratch database. This project has
+no `.git` of its own, so the git section says it reports the enclosing
+`framework-test-projects` repository.
+
+```{r}
+status()
+```
+
+`project_info()` lists every configured directory and which `save_*()`
+function writes where. Directories marked lazy are created the first time
+something is saved there.
+
+```{r}
+project_info()
+```
+
+## Reading settings
+
+`settings()` reads one value by dot path. Split files (here
+`settings/connections.yml`) are merged in, so the path doesn't care which file
+holds the value.
+
+```{r}
+settings("project_name")
+settings("directories.outputs_figures")
+settings("connections.databases.study.database")
+```
+
+A missing key returns `NULL`, or the default you pass.
+
+```{r}
+settings("analysis.alpha", default = 0.05)
+```
+
+`settings_read()` returns the whole merged configuration as a list. These are
+its top-level sections.
+
+```{r}
+project_settings <- settings_read()
+names(project_settings)
+```
+
+`settings_write()` writes a settings list back to YAML. To keep this project's
+files untouched, this writes a modified copy of the merged settings to a
+temporary file and reads it back.
+
+```{r}
+temp_settings <- file.path(tempdir(), "settings-copy.yml")
+
+copy <- settings_read()
+copy$analysis <- list(alpha = 0.01, primary_outcome = "systolic_bp")
+settings_write(copy, temp_settings)
+
+settings_read(temp_settings)$analysis
+```
+
+::: {.callout-note}
+A copy of `settings.yml` itself wouldn't read back from the temp folder: its
+split-file references (`settings/author.yml`) resolve relative to the file's
+own folder.
+:::
+
+## Dates and times
+
+`now()` returns an ISO 8601 timestamp with the time zone, handy for log lines
+and file names.
+
+```{r}
+now()
+```
+
+## Creating notebooks and scripts
+
+The notebooks in this project were made with `make_notebook()`, and
+`scripts/build-analysis-data.R` with `make_script()`. New files get a readable
+title from the name (`01-setup-and-settings` becomes "01 Setup And Settings").
+`stubs_list()` shows the templates they can use; a project `stubs/` folder
+overrides these.
+
+```{r}
+stubs_list()
+stubs_path()
+```
+
+In real use you'd call `make_notebook("name")` and the file lands in
+`notebooks/`. A `dir` is relative to the project root, wherever you call from,
+so this puts the demo files in `scratch/make-demo/` (gitignored) and removes
+them afterwards. Look at the messages: the presentation is called a
+presentation.
+
+```{r}
+sandbox <- "scratch/make-demo"
+
+make_notebook("bp-exploration", dir = sandbox, overwrite = TRUE)
+make_rmd("bp-report", dir = sandbox, overwrite = TRUE)
+make_presentation("bp-update-slides", dir = sandbox, overwrite = TRUE)
+make_script("refresh-extract", dir = sandbox, overwrite = TRUE)
+list.files(sandbox)
+```
+
+The title in the new notebook's YAML comes from its name.
+
+```{r}
+head(readLines(file.path(sandbox, "bp-exploration.qmd")), 3)
+unlink(sandbox, recursive = TRUE)
+```
+
+Your own default notebook template lives in Framework's settings folder.
+`read_framework_template()` shows it; `write_framework_template()` and
+`reset_framework_template()` change and restore it.
+
+```{r}
+cat(head(strsplit(read_framework_template("notebook"), "\n")[[1]], 12), sep = "\n")
+```
+
+## Global settings and the project registry
+
+Framework keeps your defaults (author, packages, directories for new projects)
+outside any project, in `fw_config_dir()`.
+
+```{r}
+fw_config_dir()
+global <- configure_global()
+global$author
+```
+
+`project_list()` is the registry of projects created on this machine. Look for
+the five `framework-test-projects/R` projects. The `exists` column marks
+registered folders that are gone, and the message names them so you can drop
+them with `remove_project_from_config(id)`.
+
+```{r}
+registry <- project_list()
+registry[, c("id", "path", "exists")]
+```
+
+`config_sync()` copies settings from the Python package and `fw` CLI folder
+into R's. With `dry_run = TRUE` it only reports what it would copy.
+
+```{r}
+config_sync(dry_run = TRUE)
+```
+
+## Bringing an existing folder in: adopt()
+
+`adopt()` turns a folder you already use into a Framework project by mapping
+its folder names to Framework directories. This builds a throwaway folder in
+the temp directory and adopts it, so look at the proposed mapping and the
+settings it writes.
+
+```{r}
+old_project <- file.path(tempdir(), "old-bp-analysis")
+unlink(old_project, recursive = TRUE)
+for (folder in c("data/raw", "data/clean", "R", "figures")) {
+  dir.create(file.path(old_project, folder), recursive = TRUE)
+}
+
+adopt(old_project, yes = TRUE)
+adopted <- readLines(file.path(old_project, "settings.yml"))
+cat(adopted[1:20], sep = "\n")
+```
+
+The adopted project gets the same `connections:` layout as a new one, so
+`db_connect("framework")` works there once you run `scaffold()`.
+
+```{r}
+connections_at <- grep("^  connections:", adopted)
+cat(adopted[connections_at:(connections_at + 5)], sep = "\n")
+```
+
+## After a clone: bootstrap()
+
+`bootstrap()` is what you run after cloning a project to a new machine or
+cluster. It creates missing folders (output folders stay lazy), sets up
+`framework.db`, and lists what is left to do, such as `.env` variables the
+settings actually use. Every step is safe to repeat; `packages = FALSE` skips
+installs.
+
+```{r}
+bootstrap(interactive = FALSE, packages = FALSE)
+```
+
+## Project specs
+
+New projects are built from a resolved spec. `spec_resolve()` merges layers
+(your defaults plus any overrides) into the full spec, and `spec_check()`
+validates it. This is what `fw new` and Framework Cloud send to R.
+
+```{r}
+spec <- spec_resolve(
+  layers = list(list(type = "project_sensitive")),
+  name = "demo-sensitive"
+)
+spec$type
+names(spec$directories)
+spec_check(spec)
+```
+
+## Not run here
+
+- `setup()` and `gui()` open the Framework GUI in a browser (they need
+  `plumber`). Try `gui()` in the console to browse this project's settings,
+  data catalog, and results.
+- `view(df)` opens a data frame in a browser viewer. Try
+  `view(db_query("SELECT * FROM participant_summary", "study"))`.
+- `new_project()`, `new_project_sensitive()`, `new_course()`,
+  `new_presentation()`, and `project_create()` create real projects and add
+  them to the registry. The `fw new` CLI is the same thing from the shell.
+- `quarto_regenerate()` overwrites `_quarto.yml` files.
+
+```{r}
+#| eval: false
+gui()
+new_project("bp-followup", "~/Projects/bp-followup", offline = TRUE)
+```

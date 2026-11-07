@@ -1,0 +1,69 @@
+---
+title: "Week 1: Meet the study"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  revealjs:
+    theme: default
+    slide-number: true
+    chalkboard: true
+    preview-links: auto
+    footer: "Week 1: Meet the study"
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+## The study
+
+- 300 adults with raised blood pressure at four Midwest clinics
+- Randomized to a lifestyle **intervention** or usual-care **control**
+- Up to four visits a year apart: blood pressure, weight, labs
+- One survey on sleep, exercise, stress, and satisfaction
+
+Every week's code reads the same database through the `study` connection in
+`settings.yml`.
+
+## Who enrolled
+
+```{r}
+enrolment <- db_query(
+  "SELECT s.site_name, s.setting, p.treatment, COUNT(*) AS n
+   FROM participants p JOIN sites s ON s.site_id = p.site_id
+   GROUP BY s.site_name, s.setting, p.treatment",
+  "study"
+)
+enrolment |>
+  tidyr::pivot_wider(names_from = treatment, values_from = n) |>
+  knitr::kable()
+```
+
+## Visits thin out
+
+```{r}
+#| fig-width: 8
+#| fig-height: 4
+visits_per_arm <- db_query(
+  "SELECT p.treatment, v.visit_number, COUNT(*) AS n
+   FROM visits v JOIN participants p ON p.participant_id = v.participant_id
+   GROUP BY p.treatment, v.visit_number",
+  "study"
+)
+ggplot(visits_per_arm, aes(visit_number, n, fill = treatment)) +
+  geom_col(position = "dodge") +
+  labs(x = "Visit", y = "Participants seen", fill = NULL)
+```
+
+Fewer than 60% of participants reach visit 4. Keep that in mind when you
+compare later visits.
+
+## This week
+
+- Read the syllabus in `course_docs/`
+- Work through module 1 in `modules/`
+- Start assignment 1 in `assignments/`

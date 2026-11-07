@@ -1,0 +1,183 @@
+---
+title: "05 Outputs"
+subtitle: "save_table, save_figure, save_model, save_notebook, save_report, result_list, scratch"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+jupyter: python3
+---
+
+The `save_*()` functions put results in the right `outputs/` folder and record each one
+in `framework.db`, so `result_list()` can show what the project has produced.
+
+```{python}
+#| label: setup
+import framework as fw
+import matplotlib.pyplot as plt
+import statsmodels.formula.api as smf
+
+root = fw.scaffold()
+bp = fw.data_read("inputs.final.bp_analysis")
+```
+
+## Tables
+
+A table of mean systolic and diastolic pressure by arm and visit.
+
+```{python}
+table = (
+    bp.groupby(["treatment", "visit_number"])
+    .agg(n=("systolic_bp", "size"),
+         systolic=("systolic_bp", "mean"),
+         diastolic=("diastolic_bp", "mean"))
+    .round(1)
+    .reset_index()
+)
+table
+```
+
+`save_table()` writes CSV by default and returns the path. Look for the new
+`outputs/tables/` folder in the messages.
+
+```{python}
+fw.save_table(table, "bp_by_visit")
+```
+
+Parquet keeps the column types. (`format="xlsx"` needs the `excel` extra.)
+
+```{python}
+fw.save_table(table, "bp_by_visit", format="parquet")
+```
+
+## Figures
+
+Mean systolic pressure over visits, one line per arm.
+
+```{python}
+means = bp.groupby(["visit_number", "treatment"])["systolic_bp"].mean().unstack()
+
+fig, ax = plt.subplots(figsize=(6, 4))
+for arm, color in (("control", "#7a7a7a"), ("intervention", "#1f6fb2")):
+    ax.plot(means.index, means[arm], marker="o", color=color, label=arm)
+ax.set(xlabel="Visit", ylabel="Mean systolic BP (mmHg)", xticks=means.index,
+       title="Systolic blood pressure by visit")
+ax.legend(frameon=False)
+plt.show()
+```
+
+`save_figure()` takes a matplotlib figure (or an Axes, a seaborn grid, a plotnine plot,
+or `None` for the current figure). Width and height are in inches.
+
+```{python}
+fw.save_figure(fig, "bp_trend", width=6, height=4)
+```
+
+Other formats come from `format=`. SVG suits the web.
+
+```{python}
+fw.save_figure(fig, "bp_trend", format="svg", width=6, height=4)
+```
+
+## Models
+
+An ordinary least squares model of systolic pressure on visit, arm, and their
+interaction, adjusted for age, sex, BMI, and smoking.
+
+```{python}
+model = smf.ols(
+    "systolic_bp ~ visit_number * treatment + age + sex + bmi + smoker", data=bp
+).fit()
+model.params.round(2)
+```
+
+`save_model()` pickles any fitted model to `outputs/models/<name>.pkl`.
+
+```{python}
+fw.save_model(model, "bp_ols")
+```
+
+The pickle loads back into a working results object.
+
+```{python}
+import pickle
+
+with open(root / "outputs/models/bp_ols.pkl", "rb") as f:
+    reloaded = pickle.load(f)
+round(float(reloaded.rsquared), 3)
+```
+
+## Rendered notebooks
+
+`save_notebook()` renders a `.qmd` or `.ipynb` with Quarto and saves the HTML in
+`outputs/notebooks/`. This renders the short `bp-brief.qmd` beside this notebook.
+It takes a few seconds.
+
+```{python}
+fw.save_notebook(root / "notebooks" / "bp-brief.qmd", name="bp-brief")
+```
+
+## Reports
+
+`save_report()` copies a finished file into `outputs/reports/`. Here a short Markdown
+summary is written to scratch first, then saved as a report.
+
+```{python}
+interaction = model.params["visit_number:treatment[T.intervention]"]
+low, high = model.conf_int().loc["visit_number:treatment[T.intervention]"]
+
+draft = root / fw.settings("scratch") / "bp-summary.md"
+draft.write_text(
+    "# Blood pressure summary\n\n"
+    f"Across {bp['participant_id'].nunique()} participants and {len(bp)} visits, "
+    f"systolic pressure in the intervention arm fell {abs(interaction):.1f} mmHg more "
+    f"per visit than in control (95% CI {low:.1f} to {high:.1f}).\n"
+)
+fw.save_report(draft, name="bp-summary")
+```
+
+## Listing results
+
+`result_list()` shows everything saved, newest first, with a hash of each file.
+
+```{python}
+fw.result_list()[["name", "type", "public", "created_at"]]
+```
+
+Filter by type.
+
+```{python}
+fw.result_list(type="figure")[["name", "updated_at"]]
+```
+
+## Scratch
+
+`scratch_capture()` writes an object to `scratch/` for a quick look and returns it
+unchanged, so it can sit in the middle of a pipeline. DataFrames become TSV.
+
+```{python}
+top = fw.scratch_capture(
+    bp.sort_values("systolic_bp", ascending=False), name="highest_bp.tsv", n=20
+)
+len(top)
+```
+
+Other objects become text, or pickle with `to="pickle"`.
+
+```{python}
+fw.scratch_capture(model.summary(), name="bp_ols_summary.txt")
+sorted(p.name for p in (root / fw.settings("scratch")).iterdir())
+```
+
+`scratch_clean()` deletes the files in `scratch/` (git ignores the folder anyway).
+
+```{python}
+fw.scratch_clean()
+sorted(p.name for p in (root / fw.settings("scratch")).iterdir())
+```

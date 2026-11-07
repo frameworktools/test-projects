@@ -1,0 +1,192 @@
+---
+title: "02 · The data catalog"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+This notebook brings the study's raw extracts into the project, registers them
+in the data catalog, and builds the analysis dataset the later notebooks use.
+Every read and save is tracked by a SHA-256 hash in `framework.db`, and locked
+files refuse to load if they change.
+
+## Reading a file directly
+
+`data_read()` takes a plain path too. Here it reads the site list straight from
+the shared CSV folder, with no catalog entry. The type comes from the
+extension.
+
+```{r}
+sites <- data_read("../../shared/csv/sites.csv")
+sites
+```
+
+## Raw data lands in inputs/raw
+
+A data manager has "delivered" the participant and visit extracts. Copying them
+into `inputs/raw/` stands in for that delivery.
+
+```{r}
+shared_csv <- "../../shared/csv"
+for (file in c("participants.csv", "visits.csv")) {
+  file.copy(file.path(shared_csv, file), file.path("inputs/raw", file), overwrite = TRUE)
+}
+list.files("inputs/raw")
+```
+
+`data_add()` registers an existing file. The name comes from the folder
+(`inputs/raw/visits.csv` becomes `inputs.raw.visits`), the hash is recorded,
+and the entry is written to `settings/data.yml`. Open that file after this
+chunk to see it.
+
+```{r}
+data_add("inputs/raw/participants.csv")
+data_add("inputs/raw/visits.csv")
+```
+
+## Browsing the catalog
+
+`data_list()` shows what's registered; `data_info()` shows how one entry will
+be read.
+
+```{r}
+data_list()
+```
+
+```{r}
+data_info("inputs.raw.visits")
+```
+
+## Reading by name
+
+Once registered, read by dot name instead of path. The hash is checked first
+because the entries are locked.
+
+```{r}
+visits <- data_read("inputs.raw.visits")
+participants <- data_read("inputs.raw.participants")
+
+nrow(visits)
+nrow(participants)
+```
+
+A quick look at missingness before building anything: visits have gaps in
+blood pressure and weight, and some participants lack a BMI.
+
+```{r}
+visits |> summarise(across(c(systolic_bp, diastolic_bp, weight_kg), ~ sum(is.na(.x))))
+participants |> summarise(missing_bmi = sum(is.na(bmi)))
+```
+
+## Locked files catch changes
+
+This copies the site list into `inputs/raw/`, registers it, and then appends a
+row behind Framework's back. The next `data_read()` stops with a hash mismatch.
+
+```{r}
+file.copy(file.path(shared_csv, "sites.csv"), "inputs/raw/sites.csv", overwrite = TRUE)
+data_add("inputs/raw/sites.csv")
+
+cat("5,Hilltop Clinic,Rochester,MN,urban\n", file = "inputs/raw/sites.csv", append = TRUE)
+```
+
+```{r}
+#| error: true
+data_read("inputs.raw.sites")
+```
+
+`data_verify()` does the same check without reading the data and returns
+`TRUE` or `FALSE`, so it suits a pre-flight check in a script.
+
+```{r}
+data_verify("inputs.raw.sites")
+data_verify("inputs.raw.visits")
+```
+
+Restoring the original file makes it pass again.
+
+```{r}
+file.copy(file.path(shared_csv, "sites.csv"), "inputs/raw/sites.csv", overwrite = TRUE)
+data_verify("inputs.raw.sites")
+```
+
+## Saving intermediate data from the database
+
+Lab results come from the shared database. This reshapes them to one row per
+visit and saves them with dot notation: `inputs.intermediate.labs_wide`
+becomes `inputs/intermediate/labs_wide.rds`, registered and hashed in one step.
+
+```{r}
+labs_wide <- db_query("SELECT visit_id, test, value FROM labs", "study") |>
+  tidyr::pivot_wider(names_from = test, values_from = value)
+
+data_save(labs_wide, "inputs.intermediate.labs_wide")
+```
+
+For a CSV a collaborator can open in a spreadsheet, end the dot name with
+`.csv`. `"inputs.final.labs_wide.csv"` is the catalog name
+`inputs.final.labs_wide`, saved as `inputs/final/labs_wide.csv`. (`type =
+"csv"` does the same.)
+
+```{r}
+data_save(labs_wide, "inputs.final.labs_wide.csv")
+data_info("inputs.final.labs_wide")$path
+```
+
+A plain path also works, starting at the project root wherever you call from.
+The hash is recorded but the file isn't added to the catalog, so you read and
+verify it by path.
+
+```{r}
+data_save(sites, "inputs/intermediate/sites_snapshot.csv")
+data_verify("inputs/intermediate/sites_snapshot.csv")
+```
+
+## Building the analysis dataset with a script
+
+Repeatable data preparation belongs in `scripts/`. This runs
+`scripts/build-analysis-data.R`, which joins visits to participants and sites
+and saves `inputs.final.bp_long`. You could also run it from the shell with
+`Rscript scripts/build-analysis-data.R`.
+
+```{r}
+source("scripts/build-analysis-data.R")
+```
+
+```{r}
+bp_long <- data_read("inputs.final.bp_long")
+glimpse(bp_long)
+```
+
+The blood pressure categories come from `classify_bp()` in `functions/`.
+
+```{r}
+bp_long |> count(treatment, bp_category) |> tidyr::pivot_wider(names_from = treatment, values_from = n)
+```
+
+## The catalog now
+
+Everything saved with dot notation is in the catalog, and every save is
+recorded in `framework.db`.
+
+```{r}
+data_list()
+```

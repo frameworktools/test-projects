@@ -1,0 +1,83 @@
+# r-project
+
+This file provides guidance to AI assistants working with this Framework project.
+It is the canonical context file; detailed workflow instructions live in the
+skills listed below. Edit the sections without regeneration markers freely -
+they won't be overwritten.
+
+
+## Skills
+
+Detailed instructions live in skill files, loaded on demand. Claude Code discovers
+them automatically; other agents should read the relevant SKILL.md before working
+on a matching task.
+
+| Skill | Covers | Path |
+|-------|--------|------|
+| `framework-workflow` | scaffold() initialization, critical rules, creating notebooks/scripts | `.claude/skills/framework-workflow/SKILL.md` |
+| `framework-data` | reading and saving data (data_read/data_save are mandatory) | `.claude/skills/framework-data/SKILL.md` |
+| `framework-packages` | adding and managing R packages (package_add, never install.packages) | `.claude/skills/framework-packages/SKILL.md` |
+| `framework-outputs` | results, caching, database queries, publishing | `.claude/skills/framework-outputs/SKILL.md` |
+| `ggplot2-exploring` | quick, accurate ggplot2 figures for understanding data | `.claude/skills/ggplot2-exploring/SKILL.md` |
+| `ggplot2-publishing` | polished ggplot2 figures for papers, reports, and slides | `.claude/skills/ggplot2-publishing/SKILL.md` |
+
+## Framework Environment <!-- @framework:regenerate -->
+
+This project uses Framework for reproducible data analysis. **Every notebook and script
+MUST begin with `scaffold()`** which initializes the environment.
+
+### What scaffold() Does
+
+When you call `scaffold()`, it automatically:
+
+1. **Sets the working directory** to the project root (handles nested notebook execution)
+2. **Loads environment variables** from `.env` (database credentials, API keys)
+3. **Installs missing packages** listed in settings.yml
+4. **Attaches packages** marked with `auto_attach: true` (see Packages section below)
+5. **Sources all functions** from `functions/` directory - they are globally available
+6. **Sets ggplot2 theme** to `theme_minimal()`
+
+### CRITICAL RULES
+
+**DO NOT** call `library()` for packages listed in the auto-attach section below.
+They are already loaded by scaffold(). Calling library() again wastes time and clutters output.
+
+**DO NOT** use `source()` to load functions from the functions/ directory.
+They are auto-loaded by scaffold(). Just call them directly.
+
+
+## Installed Packages <!-- @framework:regenerate -->
+
+**Auto-attached** (loaded by scaffold): dplyr, ggplot2, tidyr, stringr, readr, tibble, forcats
+**Installed** (call library() when needed): purrr, lubridate, glue, here, lme4
+
+Add packages with `package_add("name")` or `package_add("name", auto_attach = TRUE)`.
+
+## Data Management <!-- @framework:regenerate -->
+
+**All data I/O MUST use `data_read()` and `data_save()`** - see the
+`framework-data` skill for the full rules. This project's data directories:
+
+| Purpose | Directory |
+|---------|-----------|
+| Raw data (immutable) | `inputs/raw/` |
+| Intermediate/cleaned data | `inputs/intermediate/` |
+| Analysis-ready data | `inputs/final/` |
+| Output tables | `outputs/tables/` |
+| Output figures | `outputs/figures/` |
+| Saved models | `outputs/models/` |
+| Reports | `outputs/reports/` |
+
+
+## Workflow Guidelines
+
+Follow the standard Framework workflow (see the `framework-workflow` skill):
+import with `data_read()`, clean and save with `data_save()`, analyze from
+final datasets, export with `save_table()`, `save_figure()`, or `save_model()`.
+
+
+## Project Notes
+
+*Add your project-specific notes, conventions, and documentation here.*
+*This section is never modified by `ai_regenerate_context()`.*
+

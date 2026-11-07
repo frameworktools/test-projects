@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "skills": {
+    "package:framework-sensitive-data": {
+      "paths": [
+        ".claude/skills/framework-sensitive-data"
+      ],
+      "variant": "stata",
+      "hash": "77f8a7c0f25af3f7eeff0077e953dd8a769d20474b59048331773a0720e902ae",
+      "origin": {
+        "skill_id": "framework:framework-sensitive-data",
+        "hash": "77f8a7c0f25af3f7eeff0077e953dd8a769d20474b59048331773a0720e902ae"
+      }
+    },
+    "package:framework-stata": {
+      "paths": [
+        ".claude/skills/framework-stata"
+      ],
+      "variant": "stata",
+      "hash": "2a221b842520efada4cd4c872bb4132c9202cdec98e7cfbbb5755fef7e12267c",
+      "origin": {
+        "skill_id": "framework:framework-stata",
+        "hash": "2a221b842520efada4cd4c872bb4132c9202cdec98e7cfbbb5755fef7e12267c"
+      }
+    }
+  }
+}

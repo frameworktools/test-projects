@@ -1,0 +1,96 @@
+---
+title: "Blood Pressure in the Study Cohort"
+subtitle: "A framework-py slide deck from the shared study database"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  revealjs:
+    theme: default
+    transition: slide
+    slide-number: true
+execute:
+  echo: false
+jupyter: python3
+---
+
+```{python}
+#| label: setup
+#| include: false
+
+import framework as fw
+import matplotlib.pyplot as plt
+
+fw.scaffold()
+
+# The query result is cached in cache/, so re-rendering while editing slides is quick.
+visits = fw.cache_remember(
+    "deck_visits",
+    lambda: fw.db_query(
+        """
+        SELECT v.participant_id, v.visit_number, v.systolic_bp, v.diastolic_bp,
+               p.treatment, s.site_name
+        FROM visits v
+        JOIN participants p USING (participant_id)
+        JOIN sites s USING (site_id)
+        WHERE v.systolic_bp IS NOT NULL
+        """,
+        "study",
+    ),
+)
+```
+
+## The cohort
+
+```{python}
+n_people = visits["participant_id"].nunique()
+n_sites = visits["site_name"].nunique()
+```
+
+- `{python} n_people` participants at `{python} n_sites` sites
+- `{python} len(visits)` visits with a blood pressure reading
+- Two arms: control and intervention, up to four visits each
+
+## Systolic pressure falls in the intervention arm
+
+```{python}
+#| fig-align: center
+means = visits.groupby(["visit_number", "treatment"])["systolic_bp"].mean().unstack()
+fig, ax = plt.subplots(figsize=(8, 4.5))
+for arm, color in (("control", "#7a7a7a"), ("intervention", "#1f6fb2")):
+    ax.plot(means.index, means[arm], marker="o", color=color, linewidth=2)
+    ax.annotate(arm, (means.index[-1], means[arm].iloc[-1]), xytext=(8, 0),
+                textcoords="offset points", va="center", color=color)
+ax.set(xlabel="Visit", ylabel="Mean systolic BP (mmHg)", xticks=means.index)
+ax.spines[["top", "right"]].set_visible(False)
+plt.show()
+```
+
+## By site
+
+```{python}
+(
+    visits[visits["visit_number"] == visits["visit_number"].max()]
+    .pivot_table(index="site_name", columns="treatment", values="systolic_bp",
+                 aggfunc="mean")
+    .round(1)
+    .rename_axis(index="Site at last visit", columns=None)
+)
+```
+
+## How the numbers got here {.smaller}
+
+The deck queries the shared database through the `study` connection in `settings.yml`
+and caches the result:
+
+```{python}
+#| echo: true
+#| eval: false
+visits = fw.cache_remember(
+    "deck_visits",
+    lambda: fw.db_query("SELECT ... FROM visits JOIN participants ...", "study"),
+)
+```
+
+```{python}
+fw.cache_list()[["name", "created_at", "status"]]
+```

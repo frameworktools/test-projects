@@ -1,0 +1,34 @@
+# settings.yml: settings that fw, R, Python, and Stata share.
+#
+# The folders of this Stata project live in settings.do. This file adds the
+# data catalog and the publishing destination. fw_project reads both files.
+default:
+  # The data catalog: the shared study CSVs, locked. This project treats them
+  # as restricted record-level data, so 01_import_private.do saves them only
+  # under inputs/private.
+  data:
+    study:
+      sites:
+        path: ../../shared/csv/sites.csv
+        type: csv
+        locked: true
+      participants:
+        path: ../../shared/csv/participants.csv
+        type: csv
+        locked: true
+      visits:
+        path: ../../shared/csv/visits.csv
+        type: csv
+        locked: true
+
+  # One destination, for reviewed public results only. public-site is a plain
+  # folder inside the project (gitignored); open local-site/index.html after
+  # publishing. Files with "private" in their path need confirmation before
+  # fw_publish sends them anywhere.
+  publish:
+    default: public-site
+    destinations:
+      public-site:
+        driver: folder
+        path: local-site
+        visibility: public

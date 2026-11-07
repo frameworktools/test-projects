@@ -1,0 +1,227 @@
+---
+title: "01 · Private and public data"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+A `project_sensitive` project splits every data and output folder into
+`private/` (gitignored, never shared) and `public/` (reviewed, safe to
+commit). This notebook treats the participant-level study data as
+identifiable, works with it in `private/`, and moves only aggregated results
+to `public/`. Rendered notebooks go to `outputs/private/notebooks/`, both from
+`quarto render` (`_quarto.yml`) and from Framework's render settings.
+
+## The private/public layout
+
+`project_info()` shows both halves. The `save_*()` functions write to private
+by default and to public only with `public = TRUE`.
+
+```{r}
+project_info()
+```
+
+## Identifiable data goes in inputs/private
+
+The participant and survey extracts land in `inputs/private/raw/`.
+
+```{r}
+shared_csv <- "../../shared/csv"
+file.copy(file.path(shared_csv, "participants.csv"), "inputs/private/raw/participants.csv", overwrite = TRUE)
+file.copy(file.path(shared_csv, "survey.csv"), "inputs/private/raw/survey.csv", overwrite = TRUE)
+```
+
+Register them in the catalog. `data_add()` names each file from its folder,
+so `inputs/private/raw/participants.csv` becomes
+`inputs.private.raw.participants`.
+
+```{r}
+data_add("inputs/private/raw/participants.csv")
+data_add("inputs/private/raw/survey.csv")
+data_list()
+```
+
+`data_info()` flags the private location.
+
+```{r}
+data_info("inputs.private.raw.survey")$private
+```
+
+## From private rows to public aggregates
+
+Participant rows stay private. The public output is a site-by-arm summary of
+survey stress scores, with cells under 10 participants suppressed so no small
+group can be singled out.
+
+```{r}
+participants <- data_read("inputs.private.raw.participants")
+survey <- data_read("inputs.private.raw.survey")
+sites <- db_query("SELECT site_id, site_name FROM sites", "study")
+
+stress_by_site <- participants |>
+  inner_join(survey, by = "participant_id") |>
+  inner_join(sites, by = "site_id") |>
+  group_by(site_name, treatment) |>
+  summarise(
+    n = n(),
+    mean_stress = round(mean(stress_score, na.rm = TRUE), 1),
+    .groups = "drop"
+  ) |>
+  # Small-cell suppression: hide the mean, and the count, for tiny groups
+  mutate(
+    mean_stress = if_else(n < 10, NA_real_, mean_stress),
+    n = if_else(n < 10, NA_integer_, n)
+  )
+stress_by_site
+```
+
+Dot notation picks the folder: `inputs.public.final.*` saves to
+`inputs/public/final/`, and a `.csv` ending saves it as CSV.
+
+```{r}
+data_save(stress_by_site, "inputs.public.final.stress_by_site.csv")
+```
+
+## Private by default, public on request
+
+A table of individual high-stress participants is for the study team only, so
+it goes to the private tables folder.
+
+```{r}
+high_stress <- survey |> filter(stress_score >= 30) |> select(participant_id, stress_score, completed_on)
+save_table(high_stress, "high_stress_participants")
+```
+
+The aggregate table and its figure are safe to share.
+
+```{r}
+save_table(stress_by_site, "stress_by_site", public = TRUE)
+
+stress_plot <- ggplot(stress_by_site, aes(site_name, mean_stress, fill = treatment)) +
+  geom_col(position = "dodge") +
+  labs(x = NULL, y = "Mean stress score", fill = NULL)
+save_figure(stress_plot, "stress_by_site", public = TRUE, width = 7, height = 4)
+```
+
+```{r}
+result_list()[, c("name", "type", "public")]
+```
+
+## What git ignores
+
+`git check-ignore` reports which rule ignores a path. Every `private/` path is
+ignored; the public files and the code are not, so they'd be committed.
+
+```{r}
+paths <- c(
+  "inputs/private/raw/participants.csv",
+  "outputs/private/tables/high_stress_participants.csv",
+  "inputs/public/final/stress_by_site.csv",
+  "outputs/public/tables/stress_by_site.csv",
+  "notebooks/01-private-and-public-data.qmd",
+  "framework.db",
+  ".env"
+)
+ignored <- vapply(paths, function(path) {
+  status <- system2("git", c("check-ignore", "-q", path))
+  status == 0
+}, logical(1))
+data.frame(path = paths, ignored = ignored, row.names = NULL)
+```
+
+The rules come from this project's `.gitignore`.
+
+```{r}
+gitignore <- readLines(".gitignore")
+gitignore[grepl("private|sensitive", gitignore) & !startsWith(gitignore, "#")]
+```
+
+## Encryption
+
+Framework doesn't encrypt data files. Private data is protected by the folder
+layout, `.gitignore`, the audit, and the publish guard below. An `encrypted`
+argument isn't accepted.
+
+```{r}
+#| error: true
+data_save(participants, "inputs.private.intermediate.participants", encrypted = TRUE)
+```
+
+## Security audit
+
+`git_security_audit()` checks gitignore coverage of the private folders,
+tracked private files, data in git history, tracked secrets, and data files
+outside the configured folders.
+
+```{r}
+audit <- git_security_audit()
+audit$summary
+```
+
+Now simulate a slip: someone exports participant rows to the top of
+`outputs/`, outside both `private/` and `public/`. The audit flags it as a data
+file outside the configured folders, and `git check-ignore` confirms git would
+pick it up.
+
+```{r}
+data_save(participants, "outputs/participants_export.csv")
+system2("git", c("check-ignore", "-q", "outputs/participants_export.csv")) == 0
+```
+
+```{r}
+audit <- git_security_audit(check_git_history = FALSE, verbose = FALSE)
+audit$summary
+audit$findings$orphaned_files[, c("path", "extension")]
+```
+
+Clean up the slip.
+
+```{r}
+unlink("outputs/participants_export.csv")
+```
+
+## Publishing guards
+
+Publishing checks the path first. A file whose path contains "private" stops
+in a non-interactive session (and asks first in the console) unless you pass
+`include_private = TRUE`.
+
+```{r}
+#| error: true
+publish("outputs/private/tables/high_stress_participants.csv")
+```
+
+## Pre-commit hook
+
+The `data_security` hook blocks commits that track private data or secrets.
+It is off by default, even in a sensitive project; turn it on with
+`git_hooks_enable("data_security")` and `git_hooks_install()` in a project
+that is its own git repository. Here the project sits inside the shared test
+repo, so installing refuses.
+
+```{r}
+git_hooks_list()
+```
+
+```{r}
+#| error: true
+git_hooks_install()
+```

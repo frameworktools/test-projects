@@ -1,0 +1,253 @@
+---
+title: "03 Databases"
+subtitle: "Connections, db_query, db_execute, db_connect, db_transaction"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+jupyter: python3
+---
+
+Database connections are defined once in `settings/connections.yml` and opened by name.
+This project has three:
+
+- `framework`: the project's own `framework.db`, Framework's bookkeeping database.
+- `study`: the shared study database at `../../shared/study.sqlite`, opened read-only
+  (`read_only: true` in its settings).
+- `local`: `local.sqlite` in the project root, ignored by git, for write demos.
+
+```{python}
+#| label: setup
+import framework as fw
+
+root = fw.scaffold()
+```
+
+## What is configured
+
+`db_list()` shows the database connections. A relative SQLite path is resolved from the
+project root, not the working directory, so `../../shared/study.sqlite` works from
+`notebooks/` and from the root alike.
+
+```{python}
+fw.db_list()
+```
+
+`connections_list()` adds storage buckets (none here) and marks the default connection.
+
+```{python}
+fw.connections_list()
+```
+
+`db_drivers_status()` shows which drivers are installed. SQLite is built in; the
+others come from extras such as `framework-py[postgres]`.
+
+```{python}
+fw.db_drivers_status()
+```
+
+## Querying the study database
+
+`db_query()` opens the connection, runs the query, closes it, and returns a DataFrame.
+Start with what the database holds.
+
+```{python}
+fw.db_query("SELECT name, type FROM sqlite_master WHERE name NOT LIKE 'idx_%'", "study")
+```
+
+Mean systolic blood pressure by treatment arm and visit. Look for the intervention arm
+pulling away from control after the first visit.
+
+```{python}
+bp_by_visit = fw.db_query(
+    """
+    SELECT p.treatment, v.visit_number,
+           COUNT(v.systolic_bp) AS n,
+           ROUND(AVG(v.systolic_bp), 1) AS mean_systolic,
+           ROUND(AVG(v.diastolic_bp), 1) AS mean_diastolic
+    FROM visits v
+    JOIN participants p USING (participant_id)
+    GROUP BY p.treatment, v.visit_number
+    ORDER BY p.treatment, v.visit_number
+    """,
+    "study",
+)
+bp_by_visit
+```
+
+Pass values with `params`, never by formatting them into the SQL. SQLite uses `?`
+placeholders. Here: participants over 60 at one site.
+
+```{python}
+fw.db_query(
+    "SELECT participant_id, age, sex, treatment FROM participants "
+    "WHERE site_id = ? AND age > ? ORDER BY age DESC LIMIT 5",
+    "study",
+    params=[2, 60],
+)
+```
+
+Named placeholders take a mapping.
+
+```{python}
+fw.db_query(
+    "SELECT test, unit, ROUND(AVG(value), 2) AS mean, COUNT(value) AS n "
+    "FROM labs WHERE test = :test GROUP BY test, unit",
+    "study",
+    params={"test": "hba1c"},
+)
+```
+
+A bad query raises `FrameworkError` with the driver's message.
+
+```{python}
+try:
+    fw.db_query("SELECT * FROM visit", "study")
+except fw.FrameworkError as error:
+    print(error)
+```
+
+## A read-only connection
+
+`study` has `read_only: true`, so SQLite opens the file in read-only mode. Queries work
+as usual, and `db_execute()` refuses to run before it touches the file.
+
+```{python}
+fw.settings("connections.databases.study")
+```
+
+```{python}
+try:
+    fw.db_execute("DELETE FROM visits WHERE participant_id = ?", "study", params=[1])
+except fw.FrameworkError as error:
+    print(error)
+```
+
+A write through an open connection fails in SQLite itself, and `db_transaction()`
+refuses a read-only connection too.
+
+```{python}
+with fw.db_connect("study") as conn:
+    print("read_only:", conn.read_only)
+    try:
+        conn.cursor().execute("UPDATE sites SET city = 'Nowhere'")
+    except Exception as error:
+        print(type(error).__name__, error, sep=": ")
+    try:
+        with fw.db_transaction(conn):
+            pass
+    except fw.FrameworkError as error:
+        print(error)
+```
+
+## The project's own framework.db
+
+`framework.db` is where Framework keeps the data catalog's hashes, cache records, and
+saved results. It is a plain SQLite file you can query like any other.
+
+```{python}
+fw.db_query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name", "framework")
+```
+
+```{python}
+fw.db_query("SELECT name, path, locked FROM data ORDER BY name", "framework")
+```
+
+## Writing: db_execute
+
+The `local` connection is for writes. `db_execute()` runs one statement, commits it, and
+returns the number of rows affected. The file is created on first use.
+
+```{python}
+fw.db_execute("DROP TABLE IF EXISTS bp_summary", "local")
+fw.db_execute(
+    "CREATE TABLE bp_summary (treatment TEXT, visit_number INTEGER, mean_systolic REAL)",
+    "local",
+)
+```
+
+Insert rows with placeholders. The return value is the row count.
+
+```{python}
+rows = bp_by_visit[["treatment", "visit_number", "mean_systolic"]].itertuples(index=False)
+sum(
+    fw.db_execute("INSERT INTO bp_summary VALUES (?, ?, ?)", "local", params=list(row))
+    for row in rows
+)
+```
+
+## Open connections: db_connect
+
+`db_connect()` returns a connection for several statements in a row. It behaves like a
+DB-API connection and closes at the end of the `with` block.
+
+```{python}
+with fw.db_connect("local") as conn:
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*), MIN(mean_systolic), MAX(mean_systolic) FROM bp_summary")
+    print(cursor.fetchone())
+    print(conn.driver, type(conn.raw))
+```
+
+## Transactions
+
+`db_transaction()` commits the statements in its block together.
+
+```{python}
+with fw.db_connect("local") as conn, fw.db_transaction(conn):
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS notes (topic TEXT, note TEXT)")
+    cur.execute("INSERT INTO notes VALUES ('bp', 'Visit 3 has fewer readings')")
+    cur.execute("INSERT INTO notes VALUES ('labs', 'CRP has 43 missing values')")
+
+fw.db_query("SELECT * FROM notes", "local")
+```
+
+When the block raises, every statement in it is rolled back and `FrameworkError` is
+raised with the original error as its cause. The first insert below does not survive.
+
+```{python}
+try:
+    with fw.db_connect("local") as conn, fw.db_transaction(conn):
+        cur = conn.cursor()
+        cur.execute("INSERT INTO notes VALUES ('survey', 'This row is rolled back')")
+        cur.execute("INSERT INTO no_such_table VALUES (1)")
+except fw.FrameworkError as error:
+    print("Rolled back:", error)
+    print("Cause:", repr(error.__cause__))
+
+fw.db_query("SELECT COUNT(*) AS n_notes FROM notes", "local")
+```
+
+A transaction inside another on the same connection joins the outer one, so the inner
+block's failure rolls back the outer insert too.
+
+```{python}
+try:
+    with fw.db_connect("local") as conn, fw.db_transaction(conn):
+        conn.cursor().execute("INSERT INTO notes VALUES ('outer', 'rolled back too')")
+        with fw.db_transaction(conn):
+            conn.cursor().execute("INSERT INTO notes VALUES (1, 2, 3)")
+except fw.FrameworkError:
+    pass
+
+fw.db_query("SELECT topic FROM notes", "local")
+```
+
+## The shared database stays untouched
+
+Nothing above wrote to `study`, and with `read_only: true` nothing could. The file's
+modification time is from when it was built.
+
+```{python}
+import datetime
+
+study = root.parent.parent / "shared" / "study.sqlite"
+datetime.datetime.fromtimestamp(study.stat().st_mtime)
+```

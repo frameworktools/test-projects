@@ -1,0 +1,116 @@
+default:
+  project_name: r-presentation
+  project_type: presentation
+  tools:
+    quarto: yes
+    renv: no
+  author:
+    name: Your Name
+    email: your.email@example.com
+    affiliation: Your Institution
+  directories:
+    presentation_source: presentation.qmd
+    rendered_slides: '.'
+    data: data
+    cache: cache
+    scripts: scripts
+    functions: functions
+    outputs: outputs
+  extra_directories: ~
+  render_dirs: {}
+  quarto:
+    html:
+      format: html
+      embed_resources: yes
+      theme: default
+      toc: yes
+      toc_depth: 3
+      code_fold: no
+      code_tools: no
+      highlight_style: github
+    revealjs:
+      format: revealjs
+      theme: default
+      incremental: no
+      slide_number: yes
+      transition: slide
+      background_transition: fade
+      controls: yes
+      progress: yes
+      center: yes
+      highlight_style: github
+    render_dir: '.'
+  packages:
+    use_renv: no
+    default_packages:
+    - name: dplyr
+      source: cran
+      auto_attach: yes
+    - name: ggplot2
+      source: cran
+      auto_attach: yes
+    - name: tidyr
+      source: cran
+      auto_attach: yes
+    - name: stringr
+      source: cran
+      auto_attach: yes
+    - name: readr
+      source: cran
+      auto_attach: yes
+    - name: purrr
+      source: cran
+      auto_attach: no
+    - name: tibble
+      source: cran
+      auto_attach: yes
+    - name: forcats
+      source: cran
+      auto_attach: yes
+    - name: lubridate
+      source: cran
+      auto_attach: no
+    - name: glue
+      source: cran
+      auto_attach: no
+    - name: here
+      source: cran
+      auto_attach: no
+    - name: lme4
+      source: cran
+      auto_attach: no
+  git:
+    enabled: yes
+    user_name: ''
+    user_email: ''
+    hooks:
+      data_security: no
+  ai:
+    enabled: yes
+    canonical_file: AGENTS.md
+    assistants:
+    - claude
+  scaffold:
+    seed_on_scaffold: no
+    seed: '123'
+    set_theme_on_scaffold: yes
+    ggplot_theme: theme_minimal
+    notebook_format: quarto
+    workflow: quarto
+    positron: no
+    source_all_functions: yes
+  data: []
+  connections:
+    default_database: framework
+    databases:
+      framework:
+        driver: sqlite
+        database: framework.db
+      # Shared, read-only study database (path is relative to the project root)
+      study:
+        driver: sqlite
+        database: ../../shared/study.sqlite
+        read_only: true
+  security:
+    sensitive: no
+  data_hooks: ~

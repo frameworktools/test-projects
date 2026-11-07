@@ -1,0 +1,39 @@
+# Framework Stata project
+# Data files stay out of git. Do-files, settings.do, and documentation are
+# committed; data and logs are not.
+
+# Stata data and session files
+*.dta
+*.log
+*.smcl
+*.stswp
+
+# Private data, anywhere in the project
+**/private/**
+**/*_private/**
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+**/credentials/**
+**/secrets/**
+*.key
+*.pem
+
+# Logs, cache, and scratch work
+**/logs/**
+**/cache/**
+**/scratch/**
+**/tmp/**
+slurm-*.out
+
+# System files
+.DS_Store
+Thumbs.db
+*~
+*.tmp
+*.bak
+
+# Local publishing destination (see settings.yml)
+local-site/

@@ -1,0 +1,246 @@
+---
+title: "01 Setup and Settings"
+subtitle: "scaffold(), project status, settings, and creating projects"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+jupyter: python3
+---
+
+This is the first stop in the framework-py tour. Each cell is short and says what to
+look for. The notebooks are meant to run in order, 01 to 07, because later ones use
+data that 02 adds to the catalog.
+
+## Start every notebook with scaffold()
+
+`scaffold()` finds the project root, loads `.env` and the settings, records the run in
+`framework.db`, puts `functions/` on the import path, and runs `scaffold.py`. Look at the
+messages under the cell and the root path it returns.
+
+```{python}
+#| label: setup
+import framework as fw
+
+root = fw.scaffold()
+root
+```
+
+The working directory is not changed. Quarto runs this notebook from `notebooks/`, yet
+Framework still resolves every project path from the root.
+
+```{python}
+import os
+
+print("cwd: ", os.getcwd())
+print("root:", fw.project_root())
+print("framework-py", fw.__version__)
+```
+
+## Project status
+
+`status()` prints one overview: the Framework version, project type, git, AI files, the
+package manager, and whether each configured folder exists yet. This project sits inside
+the `framework-test-projects` repository; the git lines name that repository and count
+only this project's own commits and changes.
+
+```{python}
+fw.status()
+```
+
+`project_info()` returns the same folders as a DataFrame. Folders marked `False` are
+created the first time something is saved there.
+
+```{python}
+info = fw.project_info(verbose=True)
+info
+```
+
+The project name and type ride along in the DataFrame's `attrs`.
+
+```{python}
+info.attrs
+```
+
+## Reading settings
+
+`settings()` looks up a value by dot-notation key. A one-part key is looked up in
+`directories` first, so `"notebooks"` returns the notebooks folder.
+
+```{python}
+print(fw.settings("notebooks"))
+print(fw.settings("directories.outputs_figures"))
+print(fw.settings("scaffold.notebook_format"))
+print(fw.settings("no.such.key", default="(missing)"))
+```
+
+`settings.yml` points at split files under `settings/`. `settings_read()` merges them
+in, so the connections from `settings/connections.yml` appear as one section.
+
+```{python}
+config = fw.settings_read()
+sorted(config)
+```
+
+```{python}
+config["connections"]["databases"]
+```
+
+Settings can have environment sections. `FW_CONFIG_ACTIVE` (or R's `R_CONFIG_ACTIVE`)
+picks one, merged over `default`. This project has only `default`, so asking for
+`production` gives a `SettingsWarning` and the default values.
+
+```{python}
+fw.settings_read(environment="production")["project_name"]
+```
+
+## Writing settings
+
+`settings_write()` replaces one section, or the whole file. To keep the real settings
+untouched, this cell writes to a copy in a temporary folder. `scaffold` lives in the
+split file `settings/scaffold.yml`, so the values are merged into that file and
+`settings.yml` keeps pointing at it.
+
+```{python}
+import shutil
+import tempfile
+from pathlib import Path
+
+sandbox = Path(tempfile.mkdtemp())
+shutil.copytree(root / "settings", sandbox / "settings")
+shutil.copy(root / "settings.yml", sandbox / "settings.yml")
+
+fw.settings_write(
+    {"seed": "2026", "seed_on_scaffold": True},
+    settings_file=sandbox / "settings.yml",
+    section="scaffold",
+)
+print((sandbox / "settings" / "scaffold.yml").read_text())
+```
+
+## Values from .env
+
+Every project has a `.env` file, ignored by git, for credentials. Settings refer to its
+values with `env("NAME")` or `env("NAME", "fallback")`. `scaffold()` loaded the file into
+`os.environ`; empty values are skipped, so the blank placeholders stay unset.
+
+```{python}
+print((root / ".env").read_text())
+print("POSTGRES_PORT =", os.environ.get("POSTGRES_PORT"))
+print("POSTGRES_HOST =", os.environ.get("POSTGRES_HOST"))
+```
+
+This cell shows an `env()` reference resolving in the sandbox copy. The value comes
+from the environment, with the fallback when it is missing.
+
+```{python}
+fw.settings_write(
+    {"study_label": 'env("STUDY_LABEL", "Fictional BP cohort")'},
+    settings_file=sandbox / "settings.yml",
+    section="options",
+)
+print(fw.settings("options.study_label", settings_file=sandbox / "settings.yml"))
+os.environ["STUDY_LABEL"] = "Set from the environment"
+print(fw.settings("options.study_label", settings_file=sandbox / "settings.yml"))
+del os.environ["STUDY_LABEL"]
+```
+
+## Small helpers
+
+`now()` gives an ISO 8601 timestamp in the same format as R's `framework::now()`.
+`capture_output()` collects whatever a block prints, which helps with chatty model
+summaries.
+
+```{python}
+print(fw.now())
+
+with fw.capture_output() as captured:
+    fw.status()
+captured.lines[:4]
+```
+
+## Creating projects
+
+Framework creates projects from layers: Framework's defaults, your defaults, and the
+choices you pass. `tools_available()` lists the tools a Python project can turn on.
+
+```{python}
+fw.tools_available()
+```
+
+`spec_resolve()` merges layers into one spec, and `spec_check()` lists problems (an
+empty list means it is valid). Look at the directories a quarto-workflow project gets.
+
+```{python}
+resolved = fw.spec_resolve(
+    [{"type": "project", "language": "python", "scaffold": {"workflow": "quarto"}}],
+    name="sandbox-project",
+)
+print(fw.spec_check(resolved.spec))
+resolved.spec["directories"]
+```
+
+`project_create(headless=True)` builds a project from a spec without git or the project
+registry. It goes into the temporary folder, so nothing here changes.
+
+```{python}
+created = fw.project_create(resolved.spec, sandbox / "sandbox-project", headless=True)
+sorted(p.name for p in created.iterdir())
+```
+
+`adopt()` turns an existing folder into a Framework project without moving anything.
+It proposes a role for each subfolder; `yes=True` accepts the proposal. Look at how it
+mapped `data/raw`, `code`, and `figures`.
+
+```{python}
+legacy = sandbox / "old-analysis"
+for sub in ("data/raw", "code", "figures"):
+    (legacy / sub).mkdir(parents=True)
+
+fw.adopt(legacy, yes=True)
+fw.settings("directories", settings_file=legacy / "settings.yml")
+```
+
+`new()` is the everyday way to start a project (the same as `fw new NAME --lang python`
+on the command line). It runs `git init` and registers the project in your global
+settings (except in a temporary folder, as here), so it is off by default. Set
+`RUN_NEW = True` to try it; the project goes into the temporary folder.
+
+```{python}
+RUN_NEW = False
+
+if RUN_NEW:
+    path = fw.new("tour-demo", sandbox / "tour-demo", type="project",
+                  workflow="quarto", offline=True, interactive=False)
+    print(sorted(p.name for p in path.iterdir()))
+```
+
+`project_add_directory()` creates a folder and records it under `extra_directories`.
+It edits `settings.yml`, so this runs on the sandbox project.
+
+```{python}
+fw.project_add_directory(created, "interviews", "Interview transcripts", "inputs/interviews")
+fw.settings("extra_directories", settings_file=created / "settings.yml")
+```
+
+## Preparing a fresh clone
+
+`bootstrap()` prepares a cloned project: it creates missing folders, makes sure `.env`
+exists and is ignored, and installs packages. `packages=False` skips the install. Look
+at the to-do list: it names empty `.env` values that the settings refer to with
+`env()`. This project's settings use none, so the list is empty.
+
+```{python}
+result = fw.bootstrap(root, packages=False)
+result.todo
+```
+
+```{python}
+shutil.rmtree(sandbox)
+```

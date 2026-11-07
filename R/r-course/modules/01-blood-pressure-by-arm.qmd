@@ -1,0 +1,90 @@
+---
+title: "Module 1: Blood pressure by arm"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+In this module you pull visit data from the study database, summarize systolic
+pressure by arm and visit, and save a small dataset to `data/` for the
+assignment.
+
+## Get the data
+
+`db_query()` runs SQL against the `study` connection in `settings.yml` and
+closes the connection for you.
+
+```{r}
+visits <- db_query(
+  "SELECT v.participant_id, v.visit_number, v.systolic_bp, v.weight_kg, p.treatment
+   FROM visits v JOIN participants p ON p.participant_id = v.participant_id",
+  "study"
+)
+nrow(visits)
+```
+
+## Summarize
+
+Mean systolic pressure by arm and visit. Note the missing readings:
+`na.rm = TRUE` drops them, and `n_measured` shows how many were left.
+
+```{r}
+sbp_summary <- visits |>
+  group_by(treatment, visit_number) |>
+  summarise(
+    n_measured = sum(!is.na(systolic_bp)),
+    mean_systolic = round(mean(systolic_bp, na.rm = TRUE), 1),
+    .groups = "drop"
+  )
+sbp_summary
+```
+
+## Plot
+
+```{r}
+#| fig-width: 7
+#| fig-height: 4
+ggplot(sbp_summary, aes(visit_number, mean_systolic, colour = treatment)) +
+  geom_point(size = 2) +
+  geom_line() +
+  labs(x = "Visit", y = "Mean systolic pressure (mmHg)", colour = NULL)
+```
+
+The arms start close together. By visit 4 the intervention arm is about 12
+mmHg lower.
+
+## Save for the assignment
+
+`data_save()` with dot notation writes to the course's `data/` folder and
+registers the file, so the assignment can read it by name.
+
+```{r}
+data_save(visits, "data.visits_with_arm")
+```
+
+```{r}
+data_list()
+```
+
+## Try it yourself
+
+1. Change the summary to use the median. Does the picture change?
+2. Add a column for the share of readings at or above 140 mmHg.

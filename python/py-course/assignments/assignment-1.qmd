@@ -1,0 +1,38 @@
+---
+title: "Assignment 1"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+execute:
+  echo: true
+jupyter: python3
+---
+
+Use the extract from Module 1 (`data.week1_visits`). Run Module 1 first.
+
+```{python}
+#| label: setup
+import framework as fw
+
+fw.scaffold()
+visits = fw.data_read("data.week1_visits")
+```
+
+## Question 1
+
+How many participants have all four visits? A starting point:
+
+```{python}
+visits.groupby("participant_id")["visit_number"].nunique().value_counts().sort_index()
+```
+
+## Question 2
+
+Compare mean diastolic pressure at the last visit between arms. Write two sentences on
+what you find.
+
+```{python}
+# Your code here
+```

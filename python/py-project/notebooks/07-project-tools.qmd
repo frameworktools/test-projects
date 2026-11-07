@@ -1,0 +1,285 @@
+---
+title: "07 Project Tools"
+subtitle: "Packages, git hooks, security audit, AI skills, stubs and templates, global config, Quarto"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+jupyter: python3
+---
+
+The last stop covers the helpers around the analysis: dependencies, git safety, AI
+assistant files, notebook stubs, your global settings, and the Quarto configuration.
+Calls that would change your machine, your global settings, or the outer git repository
+are behind `RUN_*` flags set to `False`.
+
+```{python}
+#| label: setup
+import shutil
+import tempfile
+from pathlib import Path
+
+import framework as fw
+
+root = fw.scaffold()
+sandbox = Path(tempfile.mkdtemp())
+```
+
+## Packages
+
+`packages_list()` reads the dependencies from `pyproject.toml` and the installed
+versions from this environment.
+
+```{python}
+fw.packages_list()
+```
+
+`packages_status()` checks that `uv.lock` is current and the environment matches it.
+Look for `missing`, the dependencies that are not installed.
+
+```{python}
+fw.packages_status()
+```
+
+The rest call `uv` and change `pyproject.toml`, `uv.lock`, or the environment:
+`package_add()` (`uv add`), `packages_install()` (`uv sync`), `packages_snapshot()`
+(`uv lock`), `packages_restore()` (`uv sync --frozen`), and `packages_update()`
+(`uv lock --upgrade`). Set the flag to add seaborn and see it appear in the list.
+
+```{python}
+RUN_PACKAGES = False
+
+if RUN_PACKAGES:
+    fw.package_add("seaborn")
+    print(fw.packages_list())
+```
+
+## Git hooks
+
+Framework can install a pre-commit hook that checks for private data, unignored
+sensitive folders, and notebooks committed with outputs. `git_hooks_list()` shows the
+checks; all are off in a new project.
+
+```{python}
+fw.git_hooks_list()
+```
+
+Whether the hook is installed is in `attrs`.
+
+```{python}
+fw.git_hooks_list().attrs
+```
+
+This project has no `.git` of its own; it sits inside the outer
+`framework-test-projects` repository. Git would run the outer repository's hooks, so
+`git_hooks_install()` refuses with an explanation. This error is expected here.
+
+```{python}
+try:
+    fw.git_hooks_install()
+except fw.FrameworkError as error:
+    print(error)
+```
+
+`git_hooks_enable()` turns a check on in the settings and then installs the hook. Here
+the install refuses after the setting has been written, which is why it stays behind a
+flag. In a project with its own repository, set the flag to try it.
+
+```{python}
+RUN_GIT_HOOKS = False
+
+if RUN_GIT_HOOKS:
+    fw.git_hooks_enable("check_notebook_outputs")
+    print(fw.git_hooks_list())
+    fw.git_hooks_disable("check_notebook_outputs")
+    fw.git_hooks_uninstall()
+```
+
+## Security audit
+
+`git_security_audit()` checks that private folders and secrets are ignored, that git
+does not track data in private folders, and (optionally) the history. It only reads,
+unless `auto_fix=True`. Look at the summary lines. `local.sqlite` and the `published/`
+bundles sit outside the data folders, but `.gitignore` excludes them, so they are not
+reported as orphaned files.
+
+```{python}
+result = fw.git_security_audit(history_depth="shallow")
+result.passed
+```
+
+## AI assistant files
+
+New projects get an `AGENTS.md` (with `CLAUDE.md` pointing at it) and Framework skills
+for the chosen assistants.
+
+```{python}
+print((root / "AGENTS.md").read_text()[:600])
+sorted(p.name for p in (root / ".claude/skills").iterdir())
+```
+
+`ai_skills_update()` refreshes Framework's skills to the installed version. It keeps
+skills you edited. An empty list means they were already current.
+
+```{python}
+fw.ai_skills_update(root)
+```
+
+## Notebooks, scripts, and stubs
+
+`make_notebook()` creates a notebook from a stub. Without a type, the project's
+`scaffold.notebook_format` decides; here it is `quarto`. These go into a temporary
+folder so the project stays clean.
+
+```{python}
+print(fw.settings("scaffold.notebook_format"))
+qmd = fw.make_notebook("Lab Values", dir=sandbox)
+print(qmd.read_text()[:400])
+```
+
+An extension or `type=` picks another format, and `make_script()`, `make_qmd()`, and
+`make_revealjs()` are the specific forms.
+
+```{python}
+made = [
+    fw.make_notebook("lab-values.ipynb", dir=sandbox),
+    fw.make_notebook("Quick Look", dir=sandbox, stub="minimal"),
+    fw.make_script("Refresh Extract", dir=sandbox),
+    fw.make_qmd("Survey Notes", dir=sandbox),
+    fw.make_revealjs("Lab Meeting", dir=sandbox),
+]
+[p.name for p in made]
+```
+
+`stubs_list()` shows the stubs and where each comes from: the project's `stubs/`
+folder, your personal templates, or Framework.
+
+```{python}
+fw.stubs_list()
+```
+
+`stubs_publish()` copies Framework's stubs into the project's `stubs/` folder to
+customize. A project stub then wins over Framework's. This copies one, edits it, uses
+it, and removes the folder again.
+
+```{python}
+copied = fw.stubs_publish("notebooks", stubs=["minimal"])
+print([p.name for p in copied])
+
+stub = fw.stubs_path("user") / "notebook-minimal.qmd"
+stub.write_text(stub.read_text() + "\n## Study notes\n\nCohort: fictional BP study.\n")
+print(fw.stubs_list(type="quarto"))
+print(fw.make_notebook("with-project-stub", dir=sandbox, stub="minimal").read_text())
+
+shutil.rmtree(fw.stubs_path("user"))
+```
+
+Personal templates live in your config folder and apply to every project.
+`read_framework_template()` shows the one in use. Writing or resetting one changes your
+global setup, so it is behind a flag.
+
+```{python}
+print(fw.framework_template_path("notebook"))
+print(fw.read_framework_template("script"))
+```
+
+```{python}
+RUN_TEMPLATES = False
+
+if RUN_TEMPLATES:
+    text = fw.read_framework_template("notebook")
+    fw.write_framework_template("notebook", text.replace("Your Name", "Erik"))
+    print(fw.read_framework_template("notebook")[:200])
+    fw.reset_framework_template("notebook")
+```
+
+## Global settings and the project registry
+
+Framework's global folder holds your defaults, the project registry, and templates.
+
+```{python}
+print(fw.config_dir())
+fw.global_settings().keys()
+```
+
+`configure_global()` without arguments returns the global settings unchanged; with a
+mapping it merges values in.
+
+```{python}
+current = fw.configure_global()
+current.get("author", "(no author set)")
+```
+
+`project_list()` is the registry that `new()` adds to. The `exists` column marks
+projects whose folder is gone; remove those with `project_unregister(id)`.
+
+```{python}
+fw.project_list()[["id", "path", "exists"]]
+```
+
+`config_sync()` copies settings and saved logins from the R package's config folder.
+`dry_run=True` only reports.
+
+```{python}
+fw.config_sync(dry_run=True)
+```
+
+`load_settings_catalog()` is Framework's package defaults, with your
+`settings-catalog.yml` merged over them. Look at the project types.
+
+```{python}
+catalog = fw.load_settings_catalog()
+list(catalog["project_types"])
+```
+
+These change the registry or your defaults, so they are behind a flag.
+
+```{python}
+RUN_GLOBAL = False
+
+if RUN_GLOBAL:
+    pid = fw.project_register(sandbox)
+    print(fw.project_list())
+    fw.project_unregister(pid)
+    fw.configure_global({"author": {"name": "Your Name"}})
+```
+
+## Quarto configuration
+
+`_quarto.yml` was generated from the settings. `quarto_generate_all()` writes it from
+explicit values; here it targets a copy so you can compare. Look at `output-dir`.
+
+```{python}
+copy = sandbox / "quarto-copy"
+copy.mkdir()
+written = fw.quarto_generate_all(
+    copy, "project",
+    render_dirs=fw.settings("render_dirs"),
+    quarto_settings={"html": {"toc": False}},
+    directories=fw.settings("directories"),
+)
+print([p.name for p in written])
+print(written[0].read_text())
+```
+
+`quarto_regenerate()` rewrites the project's own files from its settings, after backing
+them up under `.quarto_backups/`. It overwrites your edits, so it runs on a copy of the
+project here.
+
+```{python}
+project_copy = sandbox / "py-project-copy"
+shutil.copytree(root, project_copy, ignore=shutil.ignore_patterns(
+    ".venv", "inputs", "outputs", "published", "*.sqlite", "framework.db"))
+regenerated = fw.quarto_regenerate(project_copy)
+regenerated
+```
+
+```{python}
+shutil.rmtree(sandbox)
+```

@@ -1,0 +1,6 @@
+git:
+  enabled: yes
+  user_name: ''
+  user_email: ''
+  hooks:
+    data_security: no

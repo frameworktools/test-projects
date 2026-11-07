@@ -1,0 +1,74 @@
+---
+title: "Assignment 1: Weight change by arm"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    df-print: paged
+execute:
+  echo: true
+  warning: true
+  message: true
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(framework)
+scaffold()
+```
+
+Run module 1 first: it saves `data.visits_with_arm`, which this assignment
+reads.
+
+```{r}
+visits <- data_read("data.visits_with_arm")
+```
+
+## Question 1
+
+For each participant, compute the change in weight from their first visit to
+their last visit with a weight recorded. The starter code below does this;
+read it and explain each step in a sentence.
+
+```{r}
+weight_change <- visits |>
+  filter(!is.na(weight_kg)) |>
+  arrange(participant_id, visit_number) |>
+  group_by(participant_id, treatment) |>
+  summarise(
+    n_weights = n(),
+    change_kg = last(weight_kg) - first(weight_kg),
+    .groups = "drop"
+  ) |>
+  filter(n_weights >= 2)
+
+weight_change |>
+  group_by(treatment) |>
+  summarise(n = n(), mean_change_kg = round(mean(change_kg), 2))
+```
+
+## Question 2
+
+Plot the distribution of `change_kg` by arm. Which plot type did you pick and
+why?
+
+```{r}
+ggplot(weight_change, aes(treatment, change_kg)) +
+  geom_boxplot() +
+  labs(x = NULL, y = "Weight change (kg)")
+```
+
+## Question 3
+
+Is the difference between arms larger than you'd expect by chance? Run a test
+and write two sentences on what it does and doesn't tell you.
+
+```{r}
+t.test(change_kg ~ treatment, data = weight_change)
+```

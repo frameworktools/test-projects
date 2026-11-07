@@ -1,0 +1,43 @@
+---
+title: "Week 1: Blood Pressure"
+author: "Your Name"
+date: "2026-11-07"
+format:
+  revealjs:
+    theme: default
+    transition: slide
+    slide-number: true
+execute:
+  echo: false
+jupyter: python3
+---
+
+```{python}
+#| label: setup
+#| include: false
+import framework as fw
+import matplotlib.pyplot as plt
+
+fw.scaffold()
+visits = fw.data_read("data.week1_visits")
+```
+
+## This week
+
+- What a blood pressure reading is
+- Our study: 300 participants, up to four visits
+- Comparing two treatment arms over time
+
+## Mean systolic pressure by visit
+
+```{python}
+means = visits.groupby(["visit_number", "treatment"])["systolic_bp"].mean().unstack()
+ax = means.plot(marker="o", figsize=(7, 4), xticks=means.index,
+                xlabel="Visit", ylabel="Mean systolic BP (mmHg)")
+plt.show()
+```
+
+## For next week
+
+- Read the assignment in `assignments/`
+- Bring one question about missing readings
