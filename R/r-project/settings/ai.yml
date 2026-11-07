@@ -1,5 +1,5 @@
 ai:
-  enabled: yes
+  enabled: true
   canonical_file: AGENTS.md
   assistants:
   - claude

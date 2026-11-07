@@ -2,8 +2,8 @@ default:
   project_name: r-project
   project_type: project
   tools:
-    quarto: yes
-    renv: no
+    quarto: true
+    renv: false
   directories:
     notebooks: notebooks
     scripts: scripts
@@ -32,7 +32,7 @@ default:
   quarto: settings/quarto.yml
   data: settings/data.yml
   security:
-    sensitive: no
+    sensitive: false
   data_hooks: ~
   # Publishing destinations for publish(), publish_notebook(), publish_data(),
   # publish_dir(), and publish_list(). local-site is a folder inside the

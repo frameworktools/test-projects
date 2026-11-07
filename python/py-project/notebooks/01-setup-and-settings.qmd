@@ -104,8 +104,8 @@ fw.settings_read(environment="production")["project_name"]
 
 `settings_write()` replaces one section, or the whole file. To keep the real settings
 untouched, this cell writes to a copy in a temporary folder. `scaffold` lives in the
-split file `settings/scaffold.yml`, so the values are merged into that file and
-`settings.yml` keeps pointing at it.
+split file `settings/scaffold.yml`, so the values are merged into that file. Look at the
+comment added first: it survives the write, and `true` stays a YAML boolean.
 
 ```{python}
 import shutil
@@ -116,12 +116,16 @@ sandbox = Path(tempfile.mkdtemp())
 shutil.copytree(root / "settings", sandbox / "settings")
 shutil.copy(root / "settings.yml", sandbox / "settings.yml")
 
+split = sandbox / "settings" / "scaffold.yml"
+split.write_text(split.read_text().replace(
+    "  seed:", "  # The seed used when seed_on_scaffold is on\n  seed:"))
+
 fw.settings_write(
     {"seed": "2026", "seed_on_scaffold": True},
     settings_file=sandbox / "settings.yml",
     section="scaffold",
 )
-print((sandbox / "settings" / "scaffold.yml").read_text())
+print(split.read_text())
 ```
 
 ## Values from .env

@@ -2,8 +2,8 @@ default:
   project_name: r-project-sensitive
   project_type: project_sensitive
   tools:
-    quarto: yes
-    renv: no
+    quarto: true
+    renv: false
   directories:
     functions: functions
     notebooks: notebooks
@@ -39,5 +39,5 @@ default:
   quarto: settings/quarto.yml
   data: settings/data.yml
   security:
-    sensitive: yes
+    sensitive: true
   data_hooks: ~

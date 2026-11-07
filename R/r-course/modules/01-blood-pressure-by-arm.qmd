@@ -84,6 +84,17 @@ data_save(visits, "data.visits_with_arm")
 data_list()
 ```
 
+The catalog lives in this course's `settings.yml`. Settings writes change only
+the `data:` section, so the comment above the `study` connection and the rest
+of the file stay as they were.
+
+```{r}
+course_settings <- readLines("settings.yml")
+data_at <- grep("^  data:", course_settings)
+cat(course_settings[data_at:(data_at + 5)], sep = "\n")
+grep("Shared, read-only study database", course_settings, value = TRUE)
+```
+
 ## Try it yourself
 
 1. Change the summary to use the median. Does the picture change?

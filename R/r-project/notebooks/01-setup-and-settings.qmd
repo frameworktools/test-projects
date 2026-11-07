@@ -53,8 +53,10 @@ classify_bp(systolic = c(118, 126, 134, 150), diastolic = c(76, 78, 84, 95))
 `status()` is the one-screen health check: project type, git, AI files, renv,
 directories (`ok` or `lazy`), and connections. The `study` connection is the
 shared database, and `analysis` is a local scratch database. This project has
-no `.git` of its own, so the git section says it reports the enclosing
-`framework-test-projects` repository.
+no `.git` of its own (`fw new` skips `git init` inside an existing
+repository), so the git section reports the enclosing
+`framework-test-projects` repository and counts the commits touching this
+project.
 
 ```{r}
 status()
@@ -126,8 +128,9 @@ now()
 ## Creating notebooks and scripts
 
 The notebooks in this project were made with `make_notebook()`, and
-`scripts/build-analysis-data.R` with `make_script()`. New files get a readable
-title from the name (`01-setup-and-settings` becomes "01 Setup And Settings").
+`scripts/build-analysis-data.R` with `make_script()`. New files get a
+sentence-case title made from the name (`bp-exploration` becomes "Bp
+exploration").
 `stubs_list()` shows the templates they can use; a project `stubs/` folder
 overrides these.
 
@@ -250,11 +253,26 @@ names(spec$directories)
 spec_check(spec)
 ```
 
+## setup() and the retired GUI
+
+The local GUI is retired. `gui()` only warns and points to Framework Cloud.
+
+```{r}
+gui()
+```
+
+`setup()` with no token creates Framework's global settings file if it's
+missing. It already exists here, so this changes nothing. With a project
+token from Framework Cloud, `setup("fw_...")` creates that project locally;
+that needs Cloud and isn't run.
+
+```{r}
+setup()
+file.exists(file.path(fw_config_dir(), "settings.yml"))
+```
+
 ## Not run here
 
-- `setup()` and `gui()` open the Framework GUI in a browser (they need
-  `plumber`). Try `gui()` in the console to browse this project's settings,
-  data catalog, and results.
 - `view(df)` opens a data frame in a browser viewer. Try
   `view(db_query("SELECT * FROM participant_summary", "study"))`.
 - `new_project()`, `new_project_sensitive()`, `new_course()`,
@@ -264,6 +282,6 @@ spec_check(spec)
 
 ```{r}
 #| eval: false
-gui()
+setup("fw_your_project_token")
 new_project("bp-followup", "~/Projects/bp-followup", offline = TRUE)
 ```

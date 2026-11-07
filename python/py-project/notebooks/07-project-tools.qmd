@@ -87,18 +87,15 @@ except fw.FrameworkError as error:
     print(error)
 ```
 
-`git_hooks_enable()` turns a check on in the settings and then installs the hook. Here
-the install refuses after the setting has been written, which is why it stays behind a
-flag. In a project with its own repository, set the flag to try it.
+`git_hooks_enable()` refuses the same way and leaves the settings unchanged: the check
+stays off.
 
 ```{python}
-RUN_GIT_HOOKS = False
-
-if RUN_GIT_HOOKS:
+try:
     fw.git_hooks_enable("check_notebook_outputs")
-    print(fw.git_hooks_list())
-    fw.git_hooks_disable("check_notebook_outputs")
-    fw.git_hooks_uninstall()
+except fw.FrameworkError as error:
+    print(str(error).splitlines()[0][:90], "...")
+fw.git_hooks_list()[["hook", "enabled"]]
 ```
 
 ## Security audit

@@ -132,11 +132,13 @@ list.files("local-site/sbp-by-visit", recursive = TRUE)
 
 These follow `publish.default` too, and take `to` to pick another
 destination. `publish_data()` writes a data frame in the format you ask for
-(CSV, RDS, Parquet, or JSON) without the table reader that `publish()` adds;
-the name of `dest` becomes the slug.
+(CSV, RDS, Parquet, or JSON) without the table reader that `publish()` adds.
+`dest` becomes the slug, folder part included: `tables/sbp_by_visit.parquet`
+is published as `tables-sbp-by-visit`.
 
 ```{r}
-publish_data(sbp_by_visit, "sbp_by_visit_data.parquet", format = "parquet")
+publish_data(sbp_by_visit, "tables/sbp_by_visit.parquet", format = "parquet")
+list.files("local-site/tables-sbp-by-visit")
 ```
 
 `publish_dir()` publishes a whole folder as one artifact.

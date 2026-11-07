@@ -1,6 +1,6 @@
 git:
-  enabled: yes
+  enabled: true
   user_name: ''
   user_email: ''
   hooks:
-    data_security: no
+    data_security: false

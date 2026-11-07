@@ -1,6 +1,6 @@
 # Python test projects
 
-Hand-testing projects for framework-py 0.1.0.dev8. Each was created with
+Hand-testing projects for framework-py 0.1.0.dev9. Each was created with
 `fw new --lang python` and then filled with notebooks that use the shared study database
 (`../shared/study.sqlite`, a fictional blood pressure cohort of 300 participants).
 
@@ -82,6 +82,8 @@ export PATH=/Applications/quarto/bin:$PATH
 - Calls that change your global settings, the project registry, or `pyproject.toml` are
   behind `RUN_* = False` flags. Cloud calls run only when `cloud_status()` says you are
   logged in.
+- If `fw new` or `uv lock` says only an older framework-py is available, uv's package
+  index cache is stale: run it again with `UV_NO_CACHE=1`.
 - Running the notebooks writes data copies to `inputs/`, results to `outputs/`, and
   catalog entries to `settings/data.yml` (`settings.yml` in py-course). To start over, empty those, delete
   `framework.db`, `local.sqlite`, and `published/`, and set `settings/data.yml` back to

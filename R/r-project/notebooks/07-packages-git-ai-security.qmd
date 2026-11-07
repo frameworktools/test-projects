@@ -41,6 +41,10 @@ it instead of `install.packages()` so the project remembers the dependency.
 broom tidies model output; open `settings/packages.yml` after this chunk to see
 the new entry.
 
+Settings writes change only the section they edit, so the rest of the file
+keeps its formatting: `true`/`false` stay as written, and comments in other
+files such as `settings/connections.yml` are untouched.
+
 ```{r}
 package_add("broom")
 tail(readLines("settings/packages.yml"), 4)
@@ -167,10 +171,11 @@ audit$summary
 ```
 
 A data file outside the configured folders that isn't ignored does show up.
-This writes one to the project root (the `./` makes `data_save()` read it as a path, not a catalog name), audits, and removes it.
+This writes one to the project root (the `./` makes `data_save()` read it as a path, not a catalog name; `framework.db` records it as plain `bp_preview.csv`), audits, and removes it.
 
 ```{r}
 data_save(head(bp_long), "./bp_preview.csv")
+db_query("SELECT name, path FROM data WHERE name LIKE '%bp_preview%'", "framework")
 audit <- git_security_audit(check_git_history = FALSE, verbose = FALSE)
 audit$findings$orphaned_files$path
 unlink("bp_preview.csv")

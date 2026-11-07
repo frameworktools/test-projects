@@ -103,19 +103,22 @@ fw.publish_notebook(root / "notebooks/bp-brief.qmd", to="local", slug="bp-brief"
 
 ## Data files and folders
 
-`publish_data()` and `publish_dir()` follow the same destinations. `publish_data()`
-writes a DataFrame (CSV, Parquet, or JSON) and publishes it; the file name in `dest`
-becomes the slug.
+`publish_data()` and `publish_dir()` follow the same destinations and take a title and
+description. `publish_data()` of a DataFrame becomes a table artifact, like `publish()`.
+The slug comes from `dest`, folder part included: `tables/bp_by_visit.csv` becomes
+`tables-bp-by-visit`.
 
 ```{python}
-fw.publish_data(table, "bp_by_visit_data.csv")
+fw.publish_data(table, "tables/bp_by_visit.csv", title="BP by visit (data)",
+                description="The bp_by_visit table as CSV")
 ```
 
 `publish_dir()` publishes a folder as one artifact. `pattern` picks the files (a
 regular expression on their paths); here only the SVG figures.
 
 ```{python}
-fw.publish_dir(root / "outputs/figures", dest="bp-figures", pattern=r"\.svg$")
+fw.publish_dir(root / "outputs/figures", dest="bp-figures", pattern=r"\.svg$",
+               title="BP figures (SVG)")
 ```
 
 `publish_list()` lists what the folder destination holds, one row per slug.
