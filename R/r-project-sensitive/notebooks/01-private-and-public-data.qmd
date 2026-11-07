@@ -110,7 +110,9 @@ high_stress <- survey |> filter(stress_score >= 30) |> select(participant_id, st
 save_table(high_stress, "high_stress_participants")
 ```
 
-The aggregate table and its figure are safe to share.
+The aggregate table and its figure are safe to share. Because this session
+has read private data, each `public = TRUE` save warns as a reminder to check
+that what you're saving is an aggregate. Look for the warnings below.
 
 ```{r}
 save_table(stress_by_site, "stress_by_site", public = TRUE)
@@ -200,8 +202,10 @@ unlink("outputs/participants_export.csv")
 
 ## Publishing guards
 
-Publishing checks the path first. A file whose path contains "private" stops
-in a non-interactive session (and asks first in the console) unless you pass
+This project's `settings.yml` has a folder destination, `local-site`
+(gitignored), so publishing can go somewhere. Publishing checks the path
+first. A file whose path contains "private" stops in a non-interactive
+session (and asks first in the console) unless you pass
 `include_private = TRUE`.
 
 ```{r}
@@ -209,13 +213,47 @@ in a non-interactive session (and asks first in the console) unless you pass
 publish("outputs/private/tables/high_stress_participants.csv")
 ```
 
+In a sensitive project, every object and every notebook also needs
+confirmation, even from a public path, because it could show private data.
+Rendering in a non-interactive session, these stop; in the console they ask.
+
+```{r}
+#| error: true
+publish(stress_by_site, slug = "stress-by-site")
+```
+
+```{r}
+#| error: true
+publish_notebook("notebooks/01-private-and-public-data.qmd")
+```
+
+Three reasons come back: the project is sensitive, the notebook's code reads
+private data, and the file name itself contains "private". The last one is
+the path check matching the notebook's own name, not a private folder.
+
+After review, `include_private = TRUE` is the confirmation. The suppressed
+site summary is safe, so it's published.
+
+```{r}
+publish(stress_by_site, slug = "stress-by-site", title = "Stress score by site and arm",
+        include_private = TRUE)
+list.files("local-site")
+```
+
+A file in `public/` that isn't a notebook publishes without a prompt.
+
+```{r}
+publish("outputs/public/figures/stress_by_site.png", title = "Stress score by site and arm (figure)")
+```
+
 ## Pre-commit hook
 
-The `data_security` hook blocks commits that track private data or secrets.
-It is off by default, even in a sensitive project; turn it on with
-`git_hooks_enable("data_security")` and `git_hooks_install()` in a project
-that is its own git repository. Here the project sits inside the shared test
-repo, so installing refuses.
+The `data_security` hook blocks commits that track private data or secrets,
+and `check_sensitive_dirs` warns about unignored sensitive folders. Sensitive
+projects turn both on in `settings/git.yml`. The hook itself is installed
+after the first commit in a project that is its own git repository. Here the
+project sits inside the shared test repo, so `git_hooks_list()` shows them
+enabled but not installed, and installing refuses.
 
 ```{r}
 git_hooks_list()

@@ -45,6 +45,13 @@ sbp_by_visit <- bp_long |>
 sbp_by_visit
 ```
 
+`show_table()` prints a data frame as a Markdown table, so it renders as a
+plain table in the HTML instead of the paged viewer, with a caption.
+
+```{r}
+show_table(sbp_by_visit, caption = "Mean systolic pressure (mmHg) by arm and visit")
+```
+
 `save_table()` writes CSV by default. Look for the path in the message; the
 folder is created on first use.
 
@@ -81,19 +88,21 @@ sbp_plot
 ```
 
 `save_figure()` takes a ggplot (or saves the last plot when `plot = NULL`).
-Size is in inches.
+Size is in inches. Several formats at once write one file each: PNG for the
+report, PDF and SVG for the paper.
 
 ```{r}
-save_figure(sbp_plot, "sbp_trajectory", width = 7, height = 4.5)
-save_figure(sbp_plot, "sbp_trajectory", format = "pdf", width = 7, height = 4.5)
+save_figure(sbp_plot, "sbp_trajectory", format = c("png", "pdf", "svg"), width = 7, height = 4.5)
 ```
 
 Base graphics work too: draw the plot, then call `save_figure()` with a name.
+A `/` in the name makes a subfolder, created as needed.
 
 ```{r}
 hist(bp_long$systolic_change, breaks = 30,
      main = "Change in systolic pressure from first visit", xlab = "mmHg")
-save_figure(name = "sbp_change_histogram", width = 6, height = 4)
+save_figure(name = "distributions/sbp_change_histogram", width = 6, height = 4)
+list.files("outputs/figures", recursive = TRUE)
 ```
 
 ## Models
@@ -109,10 +118,10 @@ bp_model <- lme4::lmer(
 save_model(bp_model, "sbp_mixed_model")
 ```
 
-The saved model reads back as the same object.
+`load_model()` reads it back by name, as the same object.
 
 ```{r}
-reloaded <- readRDS("outputs/models/sbp_mixed_model.rds")
+reloaded <- load_model("sbp_mixed_model")
 lme4::fixef(reloaded)
 ```
 

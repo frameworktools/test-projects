@@ -34,10 +34,10 @@ notebooks 02 and 05 first: this one publishes what 05 saved.
 settings("publish")
 ```
 
-To start from an empty site, remove what earlier runs published.
+To start from empty sites, remove what earlier runs published.
 
 ```{r}
-unlink("local-site", recursive = TRUE)
+unlink(c("local-site", "local-deck"), recursive = TRUE)
 ```
 
 ## Publishing R objects
@@ -56,7 +56,7 @@ A fitted model becomes coefficients, standard errors, 95% intervals, and fit
 statistics. The observations stay behind.
 
 ```{r}
-bp_model <- readRDS("outputs/models/sbp_mixed_model.rds")
+bp_model <- load_model("sbp_mixed_model")
 publish(bp_model, slug = "sbp-mixed-model", title = "Mixed model of systolic pressure",
         description = "Random intercept per participant; visit by arm interaction.")
 ```
@@ -134,17 +134,18 @@ These follow `publish.default` too, and take `to` to pick another
 destination. `publish_data()` writes a data frame in the format you ask for
 (CSV, RDS, Parquet, or JSON) without the table reader that `publish()` adds.
 `dest` becomes the slug, folder part included: `tables/sbp_by_visit.parquet`
-is published as `tables-sbp-by-visit`.
+is published as `tables-sbp-by-visit`, as the message says.
 
 ```{r}
 publish_data(sbp_by_visit, "tables/sbp_by_visit.parquet", format = "parquet")
 list.files("local-site/tables-sbp-by-visit")
 ```
 
-`publish_dir()` publishes a whole folder as one artifact.
+`publish_dir()` publishes a whole folder as one artifact. Its slug also keeps
+the folder part of `dest`: `figures/all` becomes `figures-all`.
 
 ```{r}
-publish_dir("outputs/figures", dest = "all-figures")
+publish_dir("outputs/figures", dest = "figures/all")
 ```
 
 `publish_list()` lists what's at the destination, with sizes, times, and the
@@ -152,6 +153,29 @@ local reader page for each artifact.
 
 ```{r}
 publish_list()
+```
+
+## A site-root folder destination
+
+`settings.yml` has a second destination, `local-deck`, with
+`layout: site-root`. Instead of a folder per artifact with versions, it keeps
+only the latest publish, at the folder's root, which is what a GitHub Pages
+`docs/` folder or a single slide deck wants. `to` picks it.
+
+```{r}
+settings("publish.destinations.local-deck")
+```
+
+```{r}
+publish_notebook("docs/bp-summary.qmd", to = "local-deck")
+list.files("local-deck")
+```
+
+Publishing again replaces what's there, so `local-deck/index.html` is always
+the current report. `publish_list()` shows the one artifact.
+
+```{r}
+publish_list(to = "local-deck")
 ```
 
 ## Framework Cloud and GitHub Pages (not run)

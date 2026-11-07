@@ -43,6 +43,16 @@ print("root:", fw.project_root())
 print("framework-py", fw.__version__)
 ```
 
+`project_path()` builds a path from the root, like R's `project_path()` and
+`here::here()`. `Path("outputs/tables")` here would look under `notebooks/`.
+
+```{python}
+from pathlib import Path
+
+print(fw.project_path("outputs", "tables", "bp_by_visit.csv"))
+print(Path("settings.yml").exists(), fw.project_path("settings.yml").exists())
+```
+
 ## Project status
 
 `status()` prints one overview: the Framework version, project type, git, AI files, the

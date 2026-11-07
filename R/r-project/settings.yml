@@ -44,3 +44,9 @@ default:
       local-site:
         driver: folder
         path: local-site
+      # site-root keeps only the latest publish, at the folder's root, as a
+      # GitHub Pages docs/ folder wants. Gitignored like local-site.
+      local-deck:
+        driver: folder
+        path: local-deck
+        layout: site-root

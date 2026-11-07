@@ -551,7 +551,7 @@ wheels = [
 
 [[package]]
 name = "framework-py"
-version = "0.1.0.dev9"
+version = "0.1.0.dev11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -563,9 +563,9 @@ dependencies = [
     { name = "ruamel-yaml" },
     { name = "secretstorage", marker = "sys_platform == 'linux'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4f/f2/ea8e4459a8797db48aefaddb2008d3d7c8a620724f7942050c320e2a5761/framework_py-0.1.0.dev9.tar.gz", hash = "sha256:abcb4a200c49a1bba56441e0ca12467d1462b438b8a7dc27e463e11d0d57b83d", size = 391530, upload-time = "2026-11-07T14:59:37.149Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/12/c6/e48b1f15ed4660eed5f7be863b7ce22260a2595fe3012c4dba5726938b9f/framework_py-0.1.0.dev11.tar.gz", hash = "sha256:e0e1031f9fec4aef4b7d980222136205d54c9aaa0606ab0d42a2ce78763c247f", size = 442311, upload-time = "2026-11-07T18:05:01.261Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/47/7dc46d9453c1132c4ce1d2e22c3fc562a7e1b81f21c71324c3f9e424f654/framework_py-0.1.0.dev9-py3-none-any.whl", hash = "sha256:39f202a5525387f1311ac13731128e8e280f0e2d1c32d7bac0862a04a27a45e1", size = 247795, upload-time = "2026-11-07T14:59:35.75Z" },
+    { url = "https://files.pythonhosted.org/packages/88/48/254c485dfccc56346c45b873de4c9bf1fb5543c3b3744027bcbce24d479b/framework_py-0.1.0.dev11-py3-none-any.whl", hash = "sha256:d571804372271b8db289bc3438ae3bb5e7888b5a38e6ea7342b6c480f43bce99", size = 283913, upload-time = "2026-11-07T18:04:59.086Z" },
 ]
 
 [[package]]

@@ -50,6 +50,13 @@ package_add("broom")
 tail(readLines("settings/packages.yml"), 4)
 ```
 
+`package_add()` also refreshes the package list in `AGENTS.md`, so AI
+assistants know broom is available.
+
+```{r}
+grep("broom", readLines("AGENTS.md"), value = TRUE)
+```
+
 ```{r}
 bp_long <- data_read("inputs.final.bp_long")
 bp_lm <- lm(systolic_change ~ treatment + age + sex, data = bp_long, subset = visit_number > 1)
@@ -156,9 +163,12 @@ git_hooks_uninstall()
 
 `git_security_audit()` checks that private folders are gitignored, that no
 data or secrets are tracked now or in history, and lists data files outside
-the configured folders that git would pick up. The `local-site/` bundles from
-notebook 06 and `analysis.sqlite` from notebook 03 sit outside the configured
-folders, but they're gitignored, so they aren't reported.
+the configured folders that git would pick up. It also checks that folder
+publishing destinations are gitignored (`published_outputs`), that connection
+settings hold no written-out passwords or tokens (`connection_secrets`), and
+that no tracked data file has identifier-like columns (`identifier_columns`).
+The `local-site/` and `local-deck/` folders from notebook 06 and
+`analysis.sqlite` from notebook 03 are gitignored, so they aren't reported.
 
 ```{r}
 audit <- git_security_audit()
@@ -181,6 +191,55 @@ audit$findings$orphaned_files$path
 unlink("bp_preview.csv")
 ```
 
+## The new audit checks, on a throwaway copy
+
+To see `connection_secrets` and `identifier_columns` fail without touching
+this project, this copies its settings into a temporary folder and audits
+that copy instead. The copy gets a PostgreSQL connection with a password
+written into `settings/connections.yml`, and a small git repository with a
+staged CSV whose columns look like identifiers. The CSV holds made-up rows.
+
+```{r}
+audit_copy <- file.path(tempdir(), "audit-demo")
+unlink(audit_copy, recursive = TRUE)
+dir.create(audit_copy)
+file.copy(c("settings.yml", "settings"), audit_copy, recursive = TRUE)
+
+connections_file <- file.path(audit_copy, "settings/connections.yml")
+connections_text <- readLines(connections_file)
+storage_line <- grep("^  storage_buckets:", connections_text)
+connections_text <- append(connections_text, c(
+  "    warehouse:",
+  "      driver: postgres",
+  "      host: db.example.org",
+  "      user: analyst",
+  "      password: hunter2"
+), after = storage_line - 1)
+writeLines(connections_text, connections_file)
+
+dir.create(file.path(audit_copy, "exports"))
+writeLines(c("patient_name,date_of_birth,zip_code,systolic_bp",
+             "Ana Example,1970-01-01,55401,128"),
+           file.path(audit_copy, "exports/clinic_list.csv"))
+system2("git", c("-C", audit_copy, "init", "-q"))
+system2("git", c("-C", audit_copy, "add", "exports/clinic_list.csv"))
+```
+
+Look for the `connection_secrets` and `identifier_columns` rows. The audit
+names the key and the columns but never prints the password or any values.
+
+```{r}
+copy_audit <- git_security_audit(config_file = file.path(audit_copy, "settings.yml"),
+                                  check_git_history = FALSE, verbose = FALSE)
+copy_audit$summary
+copy_audit$findings$connection_secrets
+copy_audit$findings$identifier_columns
+unlink(audit_copy, recursive = TRUE)
+```
+
+The fix for a password is `password: env("WAREHOUSE_PASSWORD")` in the
+settings and the value in `.env`, which is gitignored.
+
 ## AI assistant context
 
 Projects keep one `AGENTS.md` for AI assistants (`CLAUDE.md` points to it)
@@ -193,8 +252,9 @@ cat(head(strsplit(fresh_context, "\n")[[1]], 25), sep = "\n")
 ```
 
 `ai_regenerate_context()` rewrites only the sections of `AGENTS.md` marked
-`<!-- @framework:regenerate -->`. After `package_add("broom")` above, the
-installed packages section now lists broom.
+`<!-- @framework:regenerate -->`: the environment, packages, and data
+directories. Use it after editing settings by hand; `package_add()` already
+refreshed the packages section above.
 
 ```{r}
 ai_regenerate_context()

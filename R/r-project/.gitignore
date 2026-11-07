@@ -130,10 +130,11 @@ ehthumbs.db
 *~
 
 # ============================================================================
-# HAND-TESTING: local folder publishing destination (see settings.yml publish:)
+# HAND-TESTING: local folder publishing destinations (see settings.yml publish:)
 # ============================================================================
 
 local-site/
+local-deck/
 
 # HAND-TESTING: project-local sqlite used by the database write demos
 analysis.sqlite

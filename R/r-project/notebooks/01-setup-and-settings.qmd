@@ -41,6 +41,13 @@ getwd()
 standardize_wd()
 ```
 
+`project_path()` builds an absolute path from the project root, like
+`here::here()`, for code that hands a path to another tool.
+
+```{r}
+project_path("inputs", "raw", "visits.csv")
+```
+
 The helpers in `functions/bp_helpers.R` were sourced by scaffold(), so
 `classify_bp()` is ready without `source()`.
 
@@ -149,16 +156,19 @@ presentation.
 sandbox <- "scratch/make-demo"
 
 make_notebook("bp-exploration", dir = sandbox, overwrite = TRUE)
+make_notebook("ldl-and-hba1c", dir = sandbox, title = "LDL and HbA1c by arm", overwrite = TRUE)
 make_rmd("bp-report", dir = sandbox, overwrite = TRUE)
 make_presentation("bp-update-slides", dir = sandbox, overwrite = TRUE)
 make_script("refresh-extract", dir = sandbox, overwrite = TRUE)
 list.files(sandbox)
 ```
 
-The title in the new notebook's YAML comes from its name.
+The title in the new notebook's YAML comes from its name, in sentence case,
+so acronyms come out lowercase. Pass `title` when the name has acronyms.
 
 ```{r}
-head(readLines(file.path(sandbox, "bp-exploration.qmd")), 3)
+readLines(file.path(sandbox, "bp-exploration.qmd"))[2]
+readLines(file.path(sandbox, "ldl-and-hba1c.qmd"))[2]
 unlink(sandbox, recursive = TRUE)
 ```
 

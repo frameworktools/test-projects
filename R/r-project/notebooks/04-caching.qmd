@@ -91,6 +91,37 @@ refresh_run <- system.time(
 refresh_run["elapsed"]
 ```
 
+## depends_on: recompute when an input changes
+
+`depends_on` ties an entry to its inputs: catalog names, files, folders, or
+plain values. When any of them changes, the next call recomputes. Here the
+model depends on the analysis dataset and on the model formula, kept as a
+value.
+
+```{r}
+model_formula <- "systolic_bp ~ visit_number * treatment + age + sex + (1 | participant_id)"
+fit_from_formula <- function(formula_text) {
+  Sys.sleep(2)
+  lme4::lmer(as.formula(formula_text), data = bp_long)
+}
+
+timed <- function(expr) round(system.time(expr)["elapsed"], 2)
+
+timed(bp_model <- cache_remember("bp_model_by_formula", fit_from_formula(model_formula),
+                                 depends_on = list("inputs.final.bp_long", formula = model_formula)))
+timed(bp_model <- cache_remember("bp_model_by_formula", fit_from_formula(model_formula),
+                                 depends_on = list("inputs.final.bp_long", formula = model_formula)))
+```
+
+The second call was a cache hit. Adding BMI to the model changes the formula,
+so the next call recomputes. Look for "is out of date".
+
+```{r}
+model_formula <- "systolic_bp ~ visit_number * treatment + age + sex + bmi + (1 | participant_id)"
+timed(bp_model <- cache_remember("bp_model_by_formula", fit_from_formula(model_formula),
+                                 depends_on = list("inputs.final.bp_long", formula = model_formula)))
+```
+
 ## cache() and cache_get(): store and fetch directly
 
 `cache()` stores a value under a name, and `cache_get()` fetches it, or returns

@@ -1,6 +1,6 @@
 # Python test projects
 
-Hand-testing projects for framework-py 0.1.0.dev9. Each was created with
+Hand-testing projects for framework-py 0.1.0.dev11. Each was created with
 `fw new --lang python` and then filled with notebooks that use the shared study database
 (`../shared/study.sqlite`, a fictional blood pressure cohort of 300 participants).
 
@@ -25,20 +25,21 @@ export PATH=/Applications/quarto/bin:$PATH
 
    | Notebook | Covers |
    |----------|--------|
-   | 01 Setup and Settings | `scaffold`, `status`, settings, `.env`, creating and adopting projects, `bootstrap` |
-   | 02 Data Catalog | `data_add`, `data_list`, `data_info`, `data_read`, `data_save`, `data_verify`, integrity errors |
-   | 03 Databases | `study` (read-only), `framework`, and `local` connections, queries, writes, transactions |
-   | 04 Caching | `cache_remember`, `cache`, `cache_get`, `cache_list`, `cache_forget`, `cache_flush` |
-   | 05 Outputs | `save_table`, `save_figure`, `save_model`, `save_notebook`, `save_report`, `result_list`, scratch |
-   | 06 Publishing | `publish`, `publish_notebook`, `publish_data`, `publish_dir`, `publish_list` to the `local` folder destination; cloud and bucket calls |
-   | 07 Project Tools | packages, git hooks, security audit, AI skills, stubs and templates, global config, Quarto config |
+   | 01 Setup and Settings | `scaffold`, `project_path`, `status`, settings, `.env`, creating and adopting projects, `bootstrap` |
+   | 02 Data Catalog | `data_add`, `data_list`, `data_info` (with `columns=True`), readr-style `data_read`, `data_save`, `data_verify`, integrity errors |
+   | 03 Databases | `study` (read-only), `framework`, and `local` connections, queries, writes, `db_execute_file`, `db_copy_from`, `read_only=`, transactions |
+   | 04 Caching | `cache_remember` (with `depends_on`), `cache`, `cache_get`, `cache_list`, `cache_forget`, `cache_flush` |
+   | 05 Outputs | `save_table`, `show_table`, `save_figure` (several formats, subfolders), `save_model`, `load_model`, `save_notebook`, `save_report`, `result_list`, scratch |
+   | 06 Publishing | `publish`, `publish_notebook`, `publish_data`, `publish_dir`, `publish_list` to the `local` folder destination, and the `local-deck` site-root destination; cloud and bucket calls |
+   | 07 Project Tools | packages, git hooks, the security audit (with a throwaway copy that fails the password and identifier checks), AI skills, stubs and `title=`, global config, Quarto config |
 
    ```sh
    uv run quarto preview notebooks/01-setup-and-settings.qmd   # one at a time, live
    uv run quarto render notebooks/02-data-catalog.qmd          # or render to outputs/notebooks/
    ```
 
-   Open `published/index.html` after notebook 06 to browse the published bundles.
+   Open `published/index.html` after notebook 06 to browse the published bundles, and
+   `local-deck/index.html` for the site-root copy of the brief.
 
 2. **py-project-jupyter** (Jupyter workflow). The same tour, condensed into four
    `.ipynb` notebooks, to compare how Jupyter feels.
@@ -48,8 +49,9 @@ export PATH=/Applications/quarto/bin:$PATH
    ```
 
 3. **py-project-sensitive**. One notebook, `01-private-and-public.ipynb`: private and
-   public folders, what git ignores, small-cell suppression, `public=True` outputs, and
-   the publishing guard on private paths. `uv run jupyter lab`.
+   public folders, what git ignores, small-cell suppression, `public=True` outputs (which
+   warn after private reads), the publishing guard, and the data hooks that are on by
+   default. `uv run jupyter lab`.
 
 4. **py-course**. A module (`modules/`), slides (`slides/`), an assignment, and a
    syllabus. Render the module first: it saves the data the slides and assignment read.
@@ -86,5 +88,5 @@ export PATH=/Applications/quarto/bin:$PATH
   index cache is stale: run it again with `UV_NO_CACHE=1`.
 - Running the notebooks writes data copies to `inputs/`, results to `outputs/`, and
   catalog entries to `settings/data.yml` (`settings.yml` in py-course). To start over, empty those, delete
-  `framework.db`, `local.sqlite`, and `published/`, and set `settings/data.yml` back to
+  `framework.db`, `local.sqlite`, `published/`, and `local-deck/`, and set `settings/data.yml` back to
   `data: {}`. `scaffold()` creates a fresh `framework.db`.

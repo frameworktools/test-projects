@@ -159,3 +159,6 @@ ehthumbs.db
 *.bak
 *.swp
 *~
+
+# HAND-TESTING: local folder publishing destination (see settings.yml publish:)
+local-site/

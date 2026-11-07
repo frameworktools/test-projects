@@ -215,6 +215,55 @@ db_execute(
 )
 ```
 
+## Running a SQL file
+
+`db_execute_file()` runs every statement in a `.sql` file on a connection, in
+one transaction by default. `scripts/sql/analysis-schema.sql` creates a
+`sites` table and a view joining it to `site_bp`.
+
+```{r}
+cat(readLines("scripts/sql/analysis-schema.sql"), sep = "\n")
+```
+
+```{r}
+db_with("analysis", db_execute_file(conn, "scripts/sql/analysis-schema.sql"))
+```
+
+`db_copy_from()` loads a CSV into an existing table, here the shared site
+list.
+
+```{r}
+db_with("analysis", db_copy_from(conn, "sites", "../../shared/csv/sites.csv"))
+db_query("SELECT site_name, setting, state, treatment, mean_systolic FROM site_bp_with_setting ORDER BY site_name, treatment", "analysis")
+```
+
+## Read-only for one call
+
+`read_only` on `db_query()` or `db_connect()` overrides the connection's
+setting for that call. With `read_only = TRUE`, even the writable `analysis`
+database can't be changed through the connection.
+
+```{r}
+#| error: true
+db_query("SELECT COUNT(*) AS n FROM site_bp", "analysis", read_only = TRUE)
+
+conn <- db_connect("analysis", read_only = TRUE)
+DBI::dbExecute(conn, "DELETE FROM site_bp")
+```
+
+```{r}
+DBI::dbDisconnect(conn)
+db_query("SELECT COUNT(*) AS rows_still_there FROM site_bp", "analysis")
+```
+
+::: {.callout-warning}
+## The override works both ways
+`read_only = FALSE` on a call opens a `read_only: true` connection such as
+`study` for writing. `db_execute()` still refuses `study`, but
+`db_connect("study", read_only = FALSE)` and
+`db_query(..., "study", read_only = FALSE)` don't.
+:::
+
 ## Transactions
 
 `db_transaction()` runs a block on a connection and commits only if every

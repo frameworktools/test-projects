@@ -1,6 +1,6 @@
 ---
 title: "05 Outputs"
-subtitle: "save_table, save_figure, save_model, save_notebook, save_report, result_list, scratch"
+subtitle: "save_table, show_table, save_figure, save_model, load_model, save_notebook, save_report, result_list, scratch"
 author: "Your Name"
 date: "2026-11-07"
 format:
@@ -56,6 +56,19 @@ Parquet keeps the column types. (`format="xlsx"` needs the `excel` extra.)
 fw.save_table(table, "bp_by_visit", format="parquet")
 ```
 
+A name with a slash saves into a subfolder, which is created.
+
+```{python}
+fw.save_table(table, "meeting-2026-11/bp_by_visit")
+```
+
+`show_table()` shows a table in the page the way `knitr::kable()` does in R: a Markdown
+table that Quarto styles like the rest of the page. `digits` fixes the decimals.
+
+```{python}
+fw.show_table(table, caption="Mean blood pressure by arm and visit", digits=1)
+```
+
 ## Figures
 
 Mean systolic pressure over visits, one line per arm.
@@ -79,10 +92,12 @@ or `None` for the current figure). Width and height are in inches.
 fw.save_figure(fig, "bp_trend", width=6, height=4)
 ```
 
-Other formats come from `format=`. SVG suits the web.
+A list of formats saves one file per format, and a name with a slash saves into a
+subfolder. Look at the three paths it returns.
 
 ```{python}
-fw.save_figure(fig, "bp_trend", format="svg", width=6, height=4)
+fw.save_figure(fig, "meeting-2026-11/bp_trend", format=["png", "svg", "pdf"],
+               width=6, height=4)
 ```
 
 ## Models
@@ -103,13 +118,12 @@ model.params.round(2)
 fw.save_model(model, "bp_ols")
 ```
 
-The pickle loads back into a working results object.
+`load_model()` loads it back by name, as a working results object. It warns if the
+file changed since it was saved. (Loading is pickle's, so only load models from projects
+you trust.)
 
 ```{python}
-import pickle
-
-with open(root / "outputs/models/bp_ols.pkl", "rb") as f:
-    reloaded = pickle.load(f)
+reloaded = fw.load_model("bp_ols")
 round(float(reloaded.rsquared), 3)
 ```
 

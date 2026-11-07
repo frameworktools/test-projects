@@ -182,6 +182,46 @@ sum(
 )
 ```
 
+## Running a SQL file: db_execute_file
+
+`db_execute_file()` runs every statement in a `.sql` file, in order and in one
+transaction, and returns how many ran. `scripts/sql/local-tables.sql` creates two
+tables in `local`. A relative path starts at the project root.
+
+```{python}
+print((root / "scripts/sql/local-tables.sql").read_text())
+fw.db_execute_file("local", "scripts/sql/local-tables.sql")
+```
+
+## Loading a CSV: db_copy_from
+
+`db_copy_from()` loads a CSV into an existing table: the header names the columns, and
+empty cells and `NA` become NULL. It returns the row count.
+
+```{python}
+fw.db_copy_from("local", "sites", "inputs/raw/sites.csv")
+```
+
+```{python}
+fw.db_query("SELECT * FROM sites", "local")
+```
+
+## Read-only for one call
+
+`read_only=` overrides a connection's setting for one call. `local` is writable, but
+opened with `read_only=True` it refuses writes like `study` does. (`study` with
+`read_only=False` would open writable, which this tour never does.)
+
+```{python}
+with fw.db_connect("local", read_only=True) as conn:
+    print("read_only:", conn.read_only)
+    try:
+        fw.db_execute_file(conn, "scripts/sql/local-tables.sql")
+    except fw.FrameworkError as error:
+        print(error)
+fw.db_query("SELECT COUNT(*) AS n FROM sites", "local", read_only=True)
+```
+
 ## Open connections: db_connect
 
 `db_connect()` returns a connection for several statements in a row. It behaves like a

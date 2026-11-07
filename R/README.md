@@ -1,6 +1,6 @@
 # R hand-testing projects
 
-Five projects made with `fw new` (fw 0.4.5, framework 2.0.0), filled with notebooks
+Five projects made with `fw new` (fw 0.4.6, framework 2.0.1), filled with notebooks
 that walk through the framework R package on the shared study data. Every
 project has a `study` connection to `../../shared/study.sqlite` (300 fictional
 participants, their visits, labs, and a survey) with `read_only: true`, so
@@ -25,20 +25,20 @@ Run these in order; later ones read what earlier ones saved.
 
 | Notebook | Covers |
 |----------|--------|
-| `01-setup-and-settings` | `scaffold()`, `status()`, `project_info()`, `settings()`, `settings_read()`/`settings_write()`, `make_*()`, stubs and templates, global settings, `adopt()`, `bootstrap()`, specs, `setup()`, and the retired `gui()` |
-| `02-data-catalog` | `data_read()`, `data_add()`, `data_list()`, `data_info()`, `data_verify()`, locked-file hash checks, `data_save()`; runs `scripts/build-analysis-data.R` |
-| `03-databases` | `connections_list()`, `db_list()`, `db_query()`, `db_with()`, `db_connect()`, the read-only `study` connection refusing writes, `db_execute()`, `db_transaction()` with a rollback |
-| `04-caching` | `cache_remember()`, `cache()`, `cache_get()`, `cache_list()`, `cache_forget()`, `cache_flush()`, expiry in minutes and seconds |
-| `05-outputs` | `save_table()`, `save_figure()`, `save_model()`, `save_notebook()`, `save_report()`, `result_list()`, `capture_output()`, `scratch_capture()`, `scratch_clean()` |
-| `06-publishing` | `publish()`, `publish_notebook()`, `publish_data()`, `publish_dir()`, and `publish_list()` to the `local-site/` folder destination; Cloud functions shown with their errors or not run |
-| `07-packages-git-ai-security` | `package_add()`, `packages_*()`, renv, `git_*()`, hooks (install refuses inside the test repo), `git_security_audit()`, `ai_*()`, `env_summary()`, `env_clear()` |
+| `01-setup-and-settings` | `scaffold()`, `project_path()`, `status()`, `project_info()`, `settings()`, `settings_read()`/`settings_write()`, `make_*()` (with `title =`), stubs and templates, global settings, `adopt()`, `bootstrap()`, specs, `setup()`, and the retired `gui()` |
+| `02-data-catalog` | `data_read()` (with whitespace trimming), `data_add()`, `data_list()`, `data_info()` (with `columns = TRUE`), `data_verify()`, locked-file hash checks, `data_save()` and its warning when it replaces locked data; runs `scripts/build-analysis-data.R` |
+| `03-databases` | `connections_list()`, `db_list()`, `db_query()`, `db_with()`, `db_connect()`, the read-only `study` connection refusing writes, `read_only` per call, `db_execute()`, `db_execute_file()` (runs `scripts/sql/analysis-schema.sql`), `db_copy_from()`, `db_transaction()` with a rollback |
+| `04-caching` | `cache_remember()` (with `depends_on`), `cache()`, `cache_get()`, `cache_list()`, `cache_forget()`, `cache_flush()`, expiry in minutes and seconds |
+| `05-outputs` | `save_table()`, `show_table()`, `save_figure()` (several formats, subfolders), `save_model()`, `load_model()`, `save_notebook()`, `save_report()`, `result_list()`, `capture_output()`, `scratch_capture()`, `scratch_clean()` |
+| `06-publishing` | `publish()`, `publish_notebook()`, `publish_data()`, `publish_dir()`, and `publish_list()` to the `local-site/` folder destination, plus `local-deck/` with `layout: site-root`; Cloud functions shown with their errors or not run |
+| `07-packages-git-ai-security` | `package_add()`, `packages_*()`, renv, `git_*()`, hooks (install refuses inside the test repo), `git_security_audit()` including the secrets and identifier checks on a temporary copy, `ai_*()`, `env_summary()`, `env_clear()` |
 
-After 06, open `local-site/index.html` in a browser. Things worth trying by
+After 06, open `local-site/index.html` and `local-deck/index.html` in a browser. Things worth trying by
 hand: `view(data_read("inputs.final.bp_long"))` and `project_add_directory()`.
 The local GUI is retired; `gui()` only points to Framework Cloud.
 
-The notebooks generate `framework.db`, `analysis.sqlite`, and `local-site/`
-(gitignored) plus files in `inputs/`, `outputs/`, and `settings/data.yml`
+The notebooks generate `framework.db`, `analysis.sqlite`, `local-site/`, and
+`local-deck/` (gitignored) plus files in `inputs/`, `outputs/`, and `settings/data.yml`
 (not gitignored). Notebook 07 also adds broom to `settings/packages.yml` and
 refreshes `AGENTS.md`. Delete the generated files and set `settings/data.yml`
 back to `data: []` to start over.
@@ -47,8 +47,12 @@ back to `data: []` to start over.
 
 `notebooks/01-private-and-public-data.qmd` puts identifiable data in
 `inputs/private/`, saves aggregates to `public/`, checks what git ignores,
-shows that there's no encryption, runs the security audit, and shows the
-publish guard for private paths. Rendered output goes to
+shows the warnings on public saves after private reads, shows that there's no
+encryption, runs the security audit, and shows the publish guards: private
+paths, and confirmation for every object and notebook in a sensitive project.
+It publishes the de-identified summary to its own gitignored `local-site/`.
+The data security hooks are on in `settings/git.yml`, but they can't be
+installed while the project sits inside this repository. Rendered output goes to
 `outputs/private/notebooks/` (gitignored).
 
 ## r-course: teaching materials

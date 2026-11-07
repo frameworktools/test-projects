@@ -40,3 +40,10 @@ default:
         driver: folder
         path: published
         visibility: public
+      # site-root keeps only the latest publish, at the folder's root, as a
+      # GitHub Pages docs/ folder or a single slide deck wants.
+      local-deck:
+        driver: folder
+        path: local-deck
+        layout: site-root
+        visibility: public

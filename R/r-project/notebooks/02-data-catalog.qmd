@@ -39,6 +39,18 @@ sites <- data_read("../../shared/csv/sites.csv")
 sites
 ```
 
+`data_read()` trims spaces around CSV values and column names, as
+`readr::read_csv()` does, so a padded export still reads numbers as numbers.
+Pass `trim_ws = FALSE` to keep the spaces.
+
+```{r}
+writeLines(c("site_name , n_enrolled", "North Clinic ,   98", "Lakeside Health,  47"),
+           "scratch/padded_export.csv")
+glimpse(data_read("scratch/padded_export.csv"))
+glimpse(data_read("scratch/padded_export.csv", trim_ws = FALSE))
+unlink("scratch/padded_export.csv")
+```
+
 ## Raw data lands in inputs/raw
 
 A data manager has "delivered" the participant and visit extracts. Copying them
@@ -73,6 +85,16 @@ data_list()
 
 ```{r}
 data_info("inputs.raw.visits")
+```
+
+`columns = TRUE` adds a column summary: names, types, and missing counts, plus
+the row count. It never shows values, so it's safe to share or to hand to an
+AI assistant.
+
+```{r}
+visits_info <- data_info("inputs.raw.visits", columns = TRUE)
+visits_info$columns
+visits_info$rows
 ```
 
 ## Reading by name
@@ -159,6 +181,18 @@ verify it by path.
 data_save(sites, "inputs/intermediate/sites_snapshot.csv")
 data_verify("inputs/intermediate/sites_snapshot.csv")
 ```
+
+Saves are locked by default. Saving different contents over locked data works
+but warns, with both hashes, in case the change was a mistake. Here a filtered
+lab table replaces the full one. (On a rerun the first save warns too, since it
+replaces the filtered version.)
+
+```{r}
+data_save(labs_wide, "inputs.intermediate.labs_demo")
+data_save(labs_wide |> filter(!is.na(ldl)), "inputs.intermediate.labs_demo")
+```
+
+For data a pipeline rebuilds on purpose, save with `locked = FALSE`.
 
 ## Building the analysis dataset with a script
 

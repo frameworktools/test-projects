@@ -101,15 +101,74 @@ fw.git_hooks_list()[["hook", "enabled"]]
 ## Security audit
 
 `git_security_audit()` checks that private folders and secrets are ignored, that git
-does not track data in private folders, and (optionally) the history. It only reads,
-unless `auto_fix=True`. Look at the summary lines. `local.sqlite` and the `published/`
-bundles sit outside the data folders, but `.gitignore` excludes them, so they are not
-reported as orphaned files.
+does not track data in private folders, and (optionally) the history. It also checks
+that folder publishing destinations are ignored (`published_outputs`), that the
+connection settings hold no written-out passwords or tokens (`connection_secrets`), and
+that no tracked data file has identifier-like columns (`identifier_columns`). It only
+reads, unless `auto_fix=True`. `local.sqlite`, `published/`, and `local-deck/` are
+gitignored, so nothing is reported for them.
 
 ```{python}
 result = fw.git_security_audit(history_depth="shallow")
-result.passed
+result.summary
 ```
+
+## The new audit checks, on a throwaway copy
+
+To see `connection_secrets` and `identifier_columns` fail without touching this
+project, this copies its settings into a temporary folder and audits the copy. The copy
+gets a PostgreSQL connection with a password written into `settings/connections.yml`,
+and its own git repository with a staged CSV whose columns look like identifiers. The
+CSV holds made-up rows.
+
+```{python}
+import subprocess
+
+audit_copy = sandbox / "audit-demo"
+audit_copy.mkdir()
+shutil.copy(root / "settings.yml", audit_copy)
+shutil.copytree(root / "settings", audit_copy / "settings")
+
+connections = audit_copy / "settings/connections.yml"
+connections.write_text(connections.read_text().replace(
+    "  storage_buckets:",
+    "    warehouse:\n"
+    "      driver: postgres\n"
+    "      host: db.example.org\n"
+    "      user: analyst\n"
+    "      password: hunter2\n"
+    "  storage_buckets:",
+))
+
+(audit_copy / "exports").mkdir()
+(audit_copy / "exports/clinic_list.csv").write_text(
+    "patient_name,date_of_birth,zip_code,systolic_bp\n"
+    "Ana Example,1970-01-01,55401,128\n"
+)
+subprocess.run(["git", "-C", str(audit_copy), "init", "-q"], check=True)
+subprocess.run(["git", "-C", str(audit_copy), "add", "exports/clinic_list.csv"], check=True);
+```
+
+Look for the `connection_secrets` and `identifier_columns` rows. They are warnings here
+because the copy's settings file isn't tracked by git; a tracked one fails. The audit
+names the key and the columns but never prints the password or any values.
+
+```{python}
+copy_audit = fw.git_security_audit(audit_copy / "settings.yml",
+                                   check_git_history=False, verbose=False)
+copy_audit.summary
+```
+
+```{python}
+copy_audit.findings["connection_secrets"]
+```
+
+```{python}
+copy_audit.findings["identifier_columns"]
+```
+
+The fix for the password is `password: env("WAREHOUSE_PASSWORD")` in the settings and
+the value in `.env`, which is gitignored.
 
 ## AI assistant files
 
@@ -131,13 +190,16 @@ fw.ai_skills_update(root)
 ## Notebooks, scripts, and stubs
 
 `make_notebook()` creates a notebook from a stub. Without a type, the project's
-`scaffold.notebook_format` decides; here it is `quarto`. These go into a temporary
-folder so the project stays clean.
+`scaffold.notebook_format` decides; here it is `quarto`. The title is made from the
+name in sentence case, which can't know that "bp" and "ldl" are acronyms; `title=` sets
+it exactly. These go into a temporary folder so the project stays clean.
 
 ```{python}
 print(fw.settings("scaffold.notebook_format"))
-qmd = fw.make_notebook("Lab Values", dir=sandbox)
-print(qmd.read_text()[:400])
+qmd = fw.make_notebook("bp-for-ldl", dir=sandbox)
+print(qmd.read_text()[:60])
+qmd = fw.make_notebook("bp-for-ldl-2", dir=sandbox, title="BP for LDL")
+print(qmd.read_text()[:60])
 ```
 
 An extension or `type=` picks another format, and `make_script()`, `make_qmd()`, and

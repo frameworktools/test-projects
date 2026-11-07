@@ -22,7 +22,6 @@ Run notebook 05 first: this one publishes its outputs.
 ```{python}
 #| label: setup
 import json
-import pickle
 
 import framework as fw
 import matplotlib.pyplot as plt
@@ -78,8 +77,7 @@ A fitted statsmodels model becomes a structured summary: coefficients and fit
 statistics, never the data or a pickle.
 
 ```{python}
-with open(root / "outputs/models/bp_ols.pkl", "rb") as f:
-    model = pickle.load(f)
+model = fw.load_model("bp_ols")
 
 fw.publish(model, slug="bp-ols", title="OLS model of systolic BP")
 ```
@@ -114,10 +112,12 @@ fw.publish_data(table, "tables/bp_by_visit.csv", title="BP by visit (data)",
 ```
 
 `publish_dir()` publishes a folder as one artifact. `pattern` picks the files (a
-regular expression on their paths); here only the SVG figures.
+regular expression on their paths); here only the SVG figures, from both the main
+folder and the `meeting-2026-11/` subfolder. `dest="figures/svg"` becomes the slug
+`figures-svg`.
 
 ```{python}
-fw.publish_dir(root / "outputs/figures", dest="bp-figures", pattern=r"\.svg$",
+fw.publish_dir(root / "outputs/figures", dest="figures/svg", pattern=r"\.svg$",
                title="BP figures (SVG)")
 ```
 
@@ -125,6 +125,29 @@ fw.publish_dir(root / "outputs/figures", dest="bp-figures", pattern=r"\.svg$",
 
 ```{python}
 fw.publish_list()
+```
+
+## A site-root folder destination
+
+`settings.yml` has a second destination, `local-deck`, with `layout: site-root`.
+Instead of a folder per artifact with versions, it keeps only the latest publish, at the
+folder's root, which is what a GitHub Pages `docs/` folder or a single slide deck wants.
+`to` picks it.
+
+```{python}
+fw.settings("publish.destinations.local-deck")
+```
+
+```{python}
+fw.publish_notebook(root / "notebooks/bp-brief.qmd", to="local-deck")
+sorted(p.name for p in (root / "local-deck").iterdir())
+```
+
+Publishing again replaces what's there, so `local-deck/index.html` is always the current
+report. `publish_list()` shows the one artifact.
+
+```{python}
+fw.publish_list(to="local-deck")
 ```
 
 ## Versions

@@ -41,3 +41,10 @@ default:
   security:
     sensitive: true
   data_hooks: ~
+  # A local folder for the publishing demo in notebook 01 (gitignored).
+  publish:
+    default: local-site
+    destinations:
+      local-site:
+        driver: folder
+        path: local-site

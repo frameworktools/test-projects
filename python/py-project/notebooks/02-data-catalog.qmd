@@ -78,6 +78,16 @@ fw.data_list()
 fw.data_info("inputs.raw.visits")
 ```
 
+`columns=True` reads the file and summarizes its layout without showing any values:
+each column's type and missing count, and the number of rows. This is how to learn a
+restricted file's shape without seeing its records.
+
+```{python}
+layout = fw.data_info("inputs.raw.visits", columns=True)
+print(layout.rows, "rows")
+layout.columns
+```
+
 The entries live in `settings/data.yml`, which git tracks, so the catalog travels with
 the project.
 
@@ -97,6 +107,18 @@ visits.head()
 
 ```{python}
 visits[["systolic_bp", "diastolic_bp", "weight_kg"]].isna().sum()
+```
+
+`data_read()` reads CSV with R's readr rules and argument names: only empty cells and
+`NA` are missing, whitespace is trimmed, and `na`, `col_types`, `skip`, and `n_max`
+work as in R. Here the survey is read with `"very low"` also counted as missing, the
+satisfaction column as a factor, and only the first 100 rows.
+
+```{python}
+survey = fw.data_read("inputs.raw.survey", na=["", "NA", "very low"],
+                      col_types={"satisfaction": "f"}, n_max=100)
+print(survey.shape)
+survey["satisfaction"].value_counts(dropna=False)
 ```
 
 A path with a slash reads a file directly, without the catalog or the hash check. A
@@ -133,7 +155,9 @@ fw.data_save(bp, "inputs.intermediate.bp_visits");
 
 An extension on the name picks the format: `inputs.final.bp_analysis.csv` is the catalog
 name `inputs.final.bp_analysis`, written as CSV. (`type="csv"` does the same.) This is
-the analysis-ready file for later notebooks.
+the analysis-ready file for later notebooks. CSVs are written as R's
+`readr::write_csv()` writes them, so the same data gives the same bytes in both
+languages.
 
 ```{python}
 final = bp.assign(visit_date=lambda d: d["visit_date"].astype(str))

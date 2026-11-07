@@ -88,6 +88,29 @@ def site_summary():
 site_summary()
 ```
 
+## Recompute when the inputs change: depends_on
+
+`depends_on` ties a cached value to what it is computed from: catalog names (hashed as
+their files), files or folders, and plain values such as parameters. A change to any
+of them is a cache miss. Here the cutoff for "high" blood pressure is a parameter.
+
+```{python}
+def share_high(cutoff):
+    return round(float((bp["systolic_bp"] >= cutoff).mean()), 3)
+
+for cutoff in (140, 140, 130):
+    value = fw.cache_remember(
+        "share_high_bp",
+        lambda: share_high(cutoff),
+        depends_on=["inputs.intermediate.bp_visits", {"cutoff": cutoff}],
+    )
+    print(cutoff, value)
+```
+
+The first call computes, the second finds the cached value, and the third, with a new
+cutoff, computes again. Editing `inputs/intermediate/bp_visits.parquet` would also
+cause a recompute.
+
 ## Storing and reading values directly
 
 `cache()` stores a value and returns it. `cache_get()` reads it, with a default for a
